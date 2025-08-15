@@ -5,6 +5,7 @@ interface NativeControlInterface {
   openAccessibilitySettings(): void;
   checkPermissions(): Promise<boolean>;
   requestPermissions(): Promise<void>;
+  hasMediaProjectionPermission(): Promise<boolean>;
   start(): Promise<void>;
   stop(): Promise<void>;
 }

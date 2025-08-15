@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,26 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
   visible,
   onClose,
 }) => {
+  const [serviceEnabled, setServiceEnabled] = useState(false);
+  const [permissionsGranted, setPermissionsGranted] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      checkStatus();
+    }
+  }, [visible]);
+
+  const checkStatus = async () => {
+    try {
+      const enabled = await NativeControl.isServiceEnabled();
+      const permissions = await NativeControl.checkPermissions();
+      setServiceEnabled(enabled);
+      setPermissionsGranted(permissions);
+    } catch (error) {
+      console.error('Failed to check status:', error);
+    }
+  };
+
   const handleEnableAccessibility = () => {
     NativeControl.openAccessibilitySettings();
   };
@@ -24,7 +44,8 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
   const handleRequestPermissions = async () => {
     try {
       await NativeControl.requestPermissions();
-      // Don't close immediately, let user come back to check status
+      // Check status after a delay to see if permissions were granted
+      setTimeout(checkStatus, 1000);
     } catch (error) {
       console.error('Failed to request permissions:', error);
     }
@@ -41,24 +62,44 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
           <Text style={styles.title}>Setup Required</Text>
           
           <View style={styles.step}>
-            <Text style={styles.stepNumber}>1.</Text>
-            <Text style={styles.stepText}>Enable RL Sideswipe Access</Text>
+            <Text style={[styles.stepNumber, serviceEnabled && styles.stepCompleted]}>
+              {serviceEnabled ? '✓' : '1.'}
+            </Text>
+            <Text style={styles.stepText}>Enable Accessibility Service</Text>
             <TouchableOpacity
-              style={styles.button}
-              onPress={handleEnableAccessibility}>
-              <Text style={styles.buttonText}>Open Settings</Text>
+              style={[styles.button, serviceEnabled && styles.buttonCompleted]}
+              onPress={handleEnableAccessibility}
+              disabled={serviceEnabled}>
+              <Text style={styles.buttonText}>
+                {serviceEnabled ? 'Completed' : 'Open Settings'}
+              </Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.step}>
-            <Text style={styles.stepNumber}>2.</Text>
-            <Text style={styles.stepText}>Grant app permissions</Text>
+            <Text style={[styles.stepNumber, permissionsGranted && styles.stepCompleted]}>
+              {permissionsGranted ? '✓' : '2.'}
+            </Text>
+            <Text style={styles.stepText}>Grant App Permissions</Text>
+            <Text style={styles.stepSubtext}>
+              Microphone, Vibration, Notifications, Overlay
+            </Text>
             <TouchableOpacity
-              style={styles.button}
-              onPress={handleRequestPermissions}>
-              <Text style={styles.buttonText}>Grant Permissions</Text>
+              style={[styles.button, permissionsGranted && styles.buttonCompleted]}
+              onPress={handleRequestPermissions}
+              disabled={permissionsGranted}>
+              <Text style={styles.buttonText}>
+                {permissionsGranted ? 'Completed' : 'Grant Permissions'}
+              </Text>
             </TouchableOpacity>
           </View>
+
+          {serviceEnabled && permissionsGranted && (
+            <View style={styles.successMessage}>
+              <Text style={styles.successText}>✅ All permissions granted!</Text>
+              <Text style={styles.successSubtext}>You can now start the app</Text>
+            </View>
+          )}
 
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
             <Text style={styles.closeButtonText}>Cancel</Text>
@@ -99,9 +140,17 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     marginBottom: 8,
   },
+  stepCompleted: {
+    color: '#28a745',
+  },
   stepText: {
     fontSize: 16,
     color: '#333333',
+    marginBottom: 4,
+  },
+  stepSubtext: {
+    fontSize: 12,
+    color: '#666666',
     marginBottom: 12,
   },
   button: {
@@ -111,10 +160,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     alignItems: 'center',
   },
+  buttonCompleted: {
+    backgroundColor: '#28a745',
+  },
   buttonText: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  successMessage: {
+    backgroundColor: '#d4edda',
+    borderColor: '#c3e6cb',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  successText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#155724',
+    marginBottom: 4,
+  },
+  successSubtext: {
+    fontSize: 14,
+    color: '#155724',
   },
   closeButton: {
     marginTop: 12,

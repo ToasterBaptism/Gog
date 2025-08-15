@@ -70,24 +70,37 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
     @ReactMethod
     fun checkPermissions(promise: Promise) {
         try {
-            val requiredPermissions = mutableListOf<String>()
+            val missingPermissions = mutableListOf<String>()
+            
+            // Check runtime permissions
+            val runtimePermissions = mutableListOf<String>()
+            
+            // Always check these permissions
+            runtimePermissions.add(Manifest.permission.VIBRATE)
+            runtimePermissions.add(Manifest.permission.RECORD_AUDIO)
+            runtimePermissions.add(Manifest.permission.WAKE_LOCK)
             
             // Check notification permission for Android 13+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                if (ContextCompat.checkSelfPermission(reactApplicationContext, Manifest.permission.POST_NOTIFICATIONS) 
+                runtimePermissions.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            
+            // Check all runtime permissions
+            for (permission in runtimePermissions) {
+                if (ContextCompat.checkSelfPermission(reactApplicationContext, permission) 
                     != PackageManager.PERMISSION_GRANTED) {
-                    requiredPermissions.add(Manifest.permission.POST_NOTIFICATIONS)
+                    missingPermissions.add(permission)
                 }
             }
             
-            // Check system alert window permission
+            // Check system alert window permission separately
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 if (!Settings.canDrawOverlays(reactApplicationContext)) {
-                    requiredPermissions.add("SYSTEM_ALERT_WINDOW")
+                    missingPermissions.add("SYSTEM_ALERT_WINDOW")
                 }
             }
             
-            promise.resolve(requiredPermissions.isEmpty())
+            promise.resolve(missingPermissions.isEmpty())
         } catch (e: Exception) {
             promise.reject("ERROR", "Failed to check permissions", e)
         }
@@ -100,14 +113,26 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
             if (activity != null) {
                 val requiredPermissions = mutableListOf<String>()
                 
+                // Check all runtime permissions
+                val runtimePermissions = mutableListOf<String>()
+                runtimePermissions.add(Manifest.permission.VIBRATE)
+                runtimePermissions.add(Manifest.permission.RECORD_AUDIO)
+                runtimePermissions.add(Manifest.permission.WAKE_LOCK)
+                
                 // Check notification permission for Android 13+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    if (ContextCompat.checkSelfPermission(reactApplicationContext, Manifest.permission.POST_NOTIFICATIONS) 
+                    runtimePermissions.add(Manifest.permission.POST_NOTIFICATIONS)
+                }
+                
+                // Add missing runtime permissions to request list
+                for (permission in runtimePermissions) {
+                    if (ContextCompat.checkSelfPermission(reactApplicationContext, permission) 
                         != PackageManager.PERMISSION_GRANTED) {
-                        requiredPermissions.add(Manifest.permission.POST_NOTIFICATIONS)
+                        requiredPermissions.add(permission)
                     }
                 }
                 
+                // Request runtime permissions if any are missing
                 if (requiredPermissions.isNotEmpty()) {
                     ActivityCompat.requestPermissions(activity, requiredPermissions.toTypedArray(), REQUEST_PERMISSIONS)
                 }
@@ -126,6 +151,17 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
             }
         } catch (e: Exception) {
             promise.reject("ERROR", "Failed to request permissions", e)
+        }
+    }
+
+    @ReactMethod
+    fun hasMediaProjectionPermission(promise: Promise) {
+        try {
+            // MediaProjection permission can't be checked directly
+            // We'll assume it's not granted until the user goes through the flow
+            promise.resolve(false)
+        } catch (e: Exception) {
+            promise.reject("ERROR", "Failed to check MediaProjection permission", e)
         }
     }
 

@@ -39,10 +39,10 @@ const StartScreen: React.FC = () => {
       setPermissionsGranted(permissions);
       
       if (!enabled) {
-        setStatusText('Needs Accessibility');
+        setStatusText('Needs Accessibility Service');
         setIsActive(false);
       } else if (!permissions) {
-        setStatusText('Needs Permissions');
+        setStatusText('Needs App Permissions');
         setIsActive(false);
       } else if (isActive) {
         setStatusText('Capturing...');
