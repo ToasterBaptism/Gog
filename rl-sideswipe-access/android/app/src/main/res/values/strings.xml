@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">RL Sideswipe Access</string>
+    <string name="accessibility_service_description">Helps visually impaired users track and anticipate ball movement in Rocket League Sideswipe by detecting and predicting ball trajectory.</string>
+    <string name="screen_capture_notification_title">RL Sideswipe Access</string>
+    <string name="screen_capture_notification_text">Screen capture active</string>
+    <string name="screen_capture_notification_channel_name">Screen Capture</string>
+    <string name="screen_capture_notification_channel_description">Notifications for screen capture service</string>
+</resources>
