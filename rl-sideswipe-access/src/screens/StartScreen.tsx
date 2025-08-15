@@ -13,6 +13,7 @@ import PermissionOverlay from '../components/PermissionOverlay';
 const StartScreen: React.FC = () => {
   const [isActive, setIsActive] = useState(false);
   const [serviceEnabled, setServiceEnabled] = useState(false);
+  const [permissionsGranted, setPermissionsGranted] = useState(false);
   const [showPermissionOverlay, setShowPermissionOverlay] = useState(false);
   const [statusText, setStatusText] = useState('Service inactive');
 
@@ -32,15 +33,21 @@ const StartScreen: React.FC = () => {
   const checkServiceStatus = async () => {
     try {
       const enabled = await NativeControl.isServiceEnabled();
+      const permissions = await NativeControl.checkPermissions();
+      
       setServiceEnabled(enabled);
+      setPermissionsGranted(permissions);
       
       if (!enabled) {
         setStatusText('Needs Accessibility');
         setIsActive(false);
+      } else if (!permissions) {
+        setStatusText('Needs Permissions');
+        setIsActive(false);
       } else if (isActive) {
         setStatusText('Capturing...');
       } else {
-        setStatusText('Service inactive');
+        setStatusText('Ready to start');
       }
     } catch (error) {
       console.error('Failed to check service status:', error);
@@ -49,7 +56,7 @@ const StartScreen: React.FC = () => {
   };
 
   const handleStartStop = async () => {
-    if (!serviceEnabled) {
+    if (!serviceEnabled || !permissionsGranted) {
       setShowPermissionOverlay(true);
       return;
     }
@@ -58,7 +65,7 @@ const StartScreen: React.FC = () => {
       if (isActive) {
         await NativeControl.stop();
         setIsActive(false);
-        setStatusText('Service inactive');
+        setStatusText('Ready to start');
       } else {
         await NativeControl.start();
         setIsActive(true);
@@ -66,7 +73,7 @@ const StartScreen: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to start/stop service:', error);
-      Alert.alert('Error', 'Failed to start/stop service');
+      Alert.alert('Error', 'Failed to start/stop service. Please check permissions.');
     }
   };
 

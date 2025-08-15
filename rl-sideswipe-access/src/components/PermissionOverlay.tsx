@@ -21,12 +21,12 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
     NativeControl.openAccessibilitySettings();
   };
 
-  const handleAllowScreenCapture = async () => {
+  const handleRequestPermissions = async () => {
     try {
-      await NativeControl.start();
-      onClose();
+      await NativeControl.requestPermissions();
+      // Don't close immediately, let user come back to check status
     } catch (error) {
-      console.error('Failed to start screen capture:', error);
+      console.error('Failed to request permissions:', error);
     }
   };
 
@@ -52,11 +52,11 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
 
           <View style={styles.step}>
             <Text style={styles.stepNumber}>2.</Text>
-            <Text style={styles.stepText}>Allow screen capture</Text>
+            <Text style={styles.stepText}>Grant app permissions</Text>
             <TouchableOpacity
               style={styles.button}
-              onPress={handleAllowScreenCapture}>
-              <Text style={styles.buttonText}>Grant Permission</Text>
+              onPress={handleRequestPermissions}>
+              <Text style={styles.buttonText}>Grant Permissions</Text>
             </TouchableOpacity>
           </View>
 

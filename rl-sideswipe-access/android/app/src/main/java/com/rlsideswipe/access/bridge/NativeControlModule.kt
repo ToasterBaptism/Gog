@@ -1,10 +1,15 @@
 package com.rlsideswipe.access.bridge
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
+import android.os.Build
 import android.provider.Settings
 import android.text.TextUtils
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import com.facebook.react.bridge.*
 import com.rlsideswipe.access.service.ScreenCaptureService
 
@@ -12,6 +17,7 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
 
     companion object {
         private const val REQUEST_MEDIA_PROJECTION = 1001
+        private const val REQUEST_PERMISSIONS = 1002
     }
 
     override fun getName(): String = "NativeControlModule"
@@ -62,20 +68,85 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
     }
 
     @ReactMethod
-    fun start(promise: Promise) {
+    fun checkPermissions(promise: Promise) {
+        try {
+            val requiredPermissions = mutableListOf<String>()
+            
+            // Check notification permission for Android 13+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (ContextCompat.checkSelfPermission(reactApplicationContext, Manifest.permission.POST_NOTIFICATIONS) 
+                    != PackageManager.PERMISSION_GRANTED) {
+                    requiredPermissions.add(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+            
+            // Check system alert window permission
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (!Settings.canDrawOverlays(reactApplicationContext)) {
+                    requiredPermissions.add("SYSTEM_ALERT_WINDOW")
+                }
+            }
+            
+            promise.resolve(requiredPermissions.isEmpty())
+        } catch (e: Exception) {
+            promise.reject("ERROR", "Failed to check permissions", e)
+        }
+    }
+
+    @ReactMethod
+    fun requestPermissions(promise: Promise) {
         try {
             val activity = currentActivity
             if (activity != null) {
-                val mediaProjectionManager = activity.getSystemService(Activity.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                val captureIntent = mediaProjectionManager.createScreenCaptureIntent()
+                val requiredPermissions = mutableListOf<String>()
                 
-                val serviceIntent = Intent(reactApplicationContext, ScreenCaptureService::class.java).apply {
-                    putExtra("captureIntent", captureIntent)
+                // Check notification permission for Android 13+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    if (ContextCompat.checkSelfPermission(reactApplicationContext, Manifest.permission.POST_NOTIFICATIONS) 
+                        != PackageManager.PERMISSION_GRANTED) {
+                        requiredPermissions.add(Manifest.permission.POST_NOTIFICATIONS)
+                    }
                 }
-                reactApplicationContext.startForegroundService(serviceIntent)
+                
+                if (requiredPermissions.isNotEmpty()) {
+                    ActivityCompat.requestPermissions(activity, requiredPermissions.toTypedArray(), REQUEST_PERMISSIONS)
+                }
+                
+                // Handle system alert window permission separately
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(reactApplicationContext)) {
+                    val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    reactApplicationContext.startActivity(intent)
+                }
+                
                 promise.resolve(null)
             } else {
                 promise.reject("ERROR", "No current activity")
+            }
+        } catch (e: Exception) {
+            promise.reject("ERROR", "Failed to request permissions", e)
+        }
+    }
+
+    @ReactMethod
+    fun start(promise: Promise) {
+        try {
+            val activity = currentActivity
+            if (activity is com.rlsideswipe.access.MainActivity) {
+                activity.requestMediaProjection { captureIntent ->
+                    if (captureIntent != null) {
+                        val serviceIntent = Intent(reactApplicationContext, ScreenCaptureService::class.java).apply {
+                            putExtra("captureIntent", captureIntent)
+                        }
+                        reactApplicationContext.startForegroundService(serviceIntent)
+                        promise.resolve(null)
+                    } else {
+                        promise.reject("ERROR", "MediaProjection permission denied")
+                    }
+                }
+            } else {
+                promise.reject("ERROR", "No current activity or wrong activity type")
             }
         } catch (e: Exception) {
             promise.reject("ERROR", "Failed to start screen capture", e)
