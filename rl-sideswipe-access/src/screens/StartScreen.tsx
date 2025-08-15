@@ -33,7 +33,9 @@ const StartScreen: React.FC = () => {
   const checkServiceStatus = async () => {
     try {
       const enabled = await NativeControl.isServiceEnabled();
+      const actuallyRunning = await NativeControl.isAccessibilityServiceActuallyRunning();
       const permissions = await NativeControl.checkPermissions();
+      const batteryIgnored = await NativeControl.checkBatteryOptimization();
       
       setServiceEnabled(enabled);
       setPermissionsGranted(permissions);
@@ -41,8 +43,14 @@ const StartScreen: React.FC = () => {
       if (!enabled) {
         setStatusText('Needs Accessibility Service');
         setIsActive(false);
+      } else if (enabled && !actuallyRunning) {
+        setStatusText('Accessibility Service Not Running');
+        setIsActive(false);
       } else if (!permissions) {
         setStatusText('Needs App Permissions');
+        setIsActive(false);
+      } else if (!batteryIgnored) {
+        setStatusText('Battery Optimization Enabled');
         setIsActive(false);
       } else if (isActive) {
         setStatusText('Capturing...');

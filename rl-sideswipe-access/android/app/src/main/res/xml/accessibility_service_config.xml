@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:canPerformGestures="true"
-    android:accessibilityFeedbackType="feedbackSpoken|feedbackHaptic"
-    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
-    android:notificationTimeout="0"
+    android:canPerformGestures="false"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault"
+    android:notificationTimeout="100"
     android:canRequestFilterKeyEvents="false"
     android:canRequestTouchExplorationMode="false"
-    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowsChanged"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:packageNames="com.psyonixstudios.rl.mobile,com.rlsideswipe.access"
     android:description="@string/accessibility_service_description" />

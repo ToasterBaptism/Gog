@@ -249,4 +249,64 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
             promise.reject("ERROR", "Failed to stop screen capture: ${e.message}", e)
         }
     }
+    
+    @ReactMethod
+    fun checkBatteryOptimization(promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val powerManager = reactApplicationContext.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+                val packageName = reactApplicationContext.packageName
+                val isIgnoringBatteryOptimizations = powerManager.isIgnoringBatteryOptimizations(packageName)
+                
+                Log.d("NativeControl", "Battery optimization ignored: $isIgnoringBatteryOptimizations")
+                promise.resolve(isIgnoringBatteryOptimizations)
+            } else {
+                // Battery optimization not available on older versions
+                promise.resolve(true)
+            }
+        } catch (e: Exception) {
+            Log.e("NativeControl", "Failed to check battery optimization", e)
+            promise.reject("ERROR", "Failed to check battery optimization: ${e.message}", e)
+        }
+    }
+    
+    @ReactMethod
+    fun openBatteryOptimizationSettings(promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = android.net.Uri.parse("package:${reactApplicationContext.packageName}")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                reactApplicationContext.startActivity(intent)
+                promise.resolve(null)
+            } else {
+                promise.resolve(null)
+            }
+        } catch (e: Exception) {
+            Log.e("NativeControl", "Failed to open battery optimization settings", e)
+            // Fallback to general battery settings
+            try {
+                val intent = Intent(android.provider.Settings.ACTION_BATTERY_SAVER_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                reactApplicationContext.startActivity(intent)
+                promise.resolve(null)
+            } catch (e2: Exception) {
+                promise.reject("ERROR", "Failed to open battery settings: ${e2.message}", e2)
+            }
+        }
+    }
+    
+    @ReactMethod
+    fun isAccessibilityServiceActuallyRunning(promise: Promise) {
+        try {
+            val isRunning = com.rlsideswipe.access.service.MainAccessibilityService.isRunning()
+            Log.d("NativeControl", "Accessibility service actually running: $isRunning")
+            promise.resolve(isRunning)
+        } catch (e: Exception) {
+            Log.e("NativeControl", "Failed to check if accessibility service is running", e)
+            promise.reject("ERROR", "Failed to check accessibility service status: ${e.message}", e)
+        }
+    }
 }

@@ -18,7 +18,9 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
   onClose,
 }) => {
   const [serviceEnabled, setServiceEnabled] = useState(false);
+  const [serviceActuallyRunning, setServiceActuallyRunning] = useState(false);
   const [permissionsGranted, setPermissionsGranted] = useState(false);
+  const [batteryOptimized, setBatteryOptimized] = useState(true);
 
   useEffect(() => {
     if (visible) {
@@ -29,9 +31,16 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
   const checkStatus = async () => {
     try {
       const enabled = await NativeControl.isServiceEnabled();
+      const actuallyRunning = await NativeControl.isAccessibilityServiceActuallyRunning();
       const permissions = await NativeControl.checkPermissions();
+      const batteryIgnored = await NativeControl.checkBatteryOptimization();
+      
       setServiceEnabled(enabled);
+      setServiceActuallyRunning(actuallyRunning);
       setPermissionsGranted(permissions);
+      setBatteryOptimized(!batteryIgnored);
+      
+      console.log('Status check:', { enabled, actuallyRunning, permissions, batteryIgnored });
     } catch (error) {
       console.error('Failed to check status:', error);
     }
@@ -51,6 +60,10 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
     }
   };
 
+  const handleBatteryOptimization = () => {
+    NativeControl.openBatteryOptimizationSettings();
+  };
+
   return (
     <Modal
       visible={visible}
@@ -62,16 +75,21 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
           <Text style={styles.title}>Setup Required</Text>
           
           <View style={styles.step}>
-            <Text style={[styles.stepNumber, serviceEnabled && styles.stepCompleted]}>
-              {serviceEnabled ? '✓' : '1.'}
+            <Text style={[styles.stepNumber, serviceEnabled && serviceActuallyRunning && styles.stepCompleted]}>
+              {serviceEnabled && serviceActuallyRunning ? '✓' : '1.'}
             </Text>
             <Text style={styles.stepText}>Enable Accessibility Service</Text>
+            {serviceEnabled && !serviceActuallyRunning && (
+              <Text style={styles.warningText}>
+                ⚠️ Service enabled but not running - may be killed by system
+              </Text>
+            )}
             <TouchableOpacity
-              style={[styles.button, serviceEnabled && styles.buttonCompleted]}
+              style={[styles.button, serviceEnabled && serviceActuallyRunning && styles.buttonCompleted]}
               onPress={handleEnableAccessibility}
-              disabled={serviceEnabled}>
+              disabled={serviceEnabled && serviceActuallyRunning}>
               <Text style={styles.buttonText}>
-                {serviceEnabled ? 'Completed' : 'Open Settings'}
+                {serviceEnabled && serviceActuallyRunning ? 'Completed' : 'Open Settings'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -94,10 +112,28 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
             </TouchableOpacity>
           </View>
 
-          {serviceEnabled && permissionsGranted && (
+          <View style={styles.step}>
+            <Text style={[styles.stepNumber, !batteryOptimized && styles.stepCompleted]}>
+              {!batteryOptimized ? '✓' : '3.'}
+            </Text>
+            <Text style={styles.stepText}>Disable Battery Optimization</Text>
+            <Text style={styles.stepSubtext}>
+              Prevents Android from killing the accessibility service
+            </Text>
+            <TouchableOpacity
+              style={[styles.button, !batteryOptimized && styles.buttonCompleted]}
+              onPress={handleBatteryOptimization}
+              disabled={!batteryOptimized}>
+              <Text style={styles.buttonText}>
+                {!batteryOptimized ? 'Completed' : 'Open Settings'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {serviceEnabled && serviceActuallyRunning && permissionsGranted && !batteryOptimized && (
             <View style={styles.successMessage}>
-              <Text style={styles.successText}>✅ All permissions granted!</Text>
-              <Text style={styles.successSubtext}>You can now start the app</Text>
+              <Text style={styles.successText}>✅ All setup completed!</Text>
+              <Text style={styles.successSubtext}>Your accessibility service should stay active</Text>
             </View>
           )}
 
@@ -152,6 +188,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666666',
     marginBottom: 12,
+  },
+  warningText: {
+    fontSize: 12,
+    color: '#ff6b35',
+    marginBottom: 8,
+    fontWeight: '500',
   },
   button: {
     backgroundColor: '#007AFF',
