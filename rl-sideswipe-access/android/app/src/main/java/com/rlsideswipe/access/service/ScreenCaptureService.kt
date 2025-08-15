@@ -84,15 +84,27 @@ class ScreenCaptureService : Service() {
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val captureIntent = intent?.getParcelableExtra<Intent>("captureIntent")
-        if (captureIntent != null) {
-            startCapture(captureIntent)
+        try {
+            Log.d(TAG, "ScreenCaptureService onStartCommand called")
+            
+            val notification = createNotification()
+            startForeground(NOTIFICATION_ID, notification)
+            Log.d(TAG, "Foreground service started with notification")
+            
+            val captureIntent = intent?.getParcelableExtra<Intent>("captureIntent")
+            if (captureIntent != null) {
+                Log.d(TAG, "Starting screen capture with intent")
+                startCapture(captureIntent)
+            } else {
+                Log.e(TAG, "No capture intent provided")
+            }
+            
+            return START_STICKY
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in onStartCommand", e)
+            stopSelf()
+            return START_NOT_STICKY
         }
-        
-        val notification = createNotification()
-        startForeground(NOTIFICATION_ID, notification)
-        
-        return START_STICKY
     }
     
     override fun onBind(intent: Intent?): IBinder? = null
@@ -122,36 +134,72 @@ class ScreenCaptureService : Service() {
     }
     
     private fun startCapture(captureIntent: Intent) {
-        val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        mediaProjection = mediaProjectionManager.getMediaProjection(Activity.RESULT_OK, captureIntent)
-        
-        val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        val displayMetrics = DisplayMetrics()
-        windowManager.defaultDisplay.getMetrics(displayMetrics)
-        
-        val width = displayMetrics.widthPixels
-        val height = displayMetrics.heightPixels
-        val density = displayMetrics.densityDpi
-        
-        // Use YUV_420_888 for better performance, fallback to RGBA_8888
-        val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            ImageFormat.YUV_420_888
-        } else {
-            PixelFormat.RGBA_8888
+        try {
+            Log.d(TAG, "Initializing MediaProjection...")
+            val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            mediaProjection = mediaProjectionManager.getMediaProjection(Activity.RESULT_OK, captureIntent)
+            
+            if (mediaProjection == null) {
+                Log.e(TAG, "Failed to create MediaProjection")
+                stopSelf()
+                return
+            }
+            
+            Log.d(TAG, "Getting display metrics...")
+            val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+            val displayMetrics = DisplayMetrics()
+            windowManager.defaultDisplay.getMetrics(displayMetrics)
+            
+            val width = displayMetrics.widthPixels
+            val height = displayMetrics.heightPixels
+            val density = displayMetrics.densityDpi
+            
+            Log.d(TAG, "Display: ${width}x${height}, density: $density")
+            
+            // Use YUV_420_888 for better performance, fallback to RGBA_8888
+            val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                ImageFormat.YUV_420_888
+            } else {
+                PixelFormat.RGBA_8888
+            }
+            
+            Log.d(TAG, "Creating ImageReader with format: $format")
+            imageReader = ImageReader.newInstance(width, height, format, 3) // Increased buffer size
+            imageReader?.setOnImageAvailableListener(imageAvailableListener, backgroundHandler)
+            
+            Log.d(TAG, "Creating VirtualDisplay...")
+            virtualDisplay = mediaProjection?.createVirtualDisplay(
+                "ScreenCapture",
+                width, height, density,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                imageReader?.surface,
+                null, null
+            )
+            
+            if (virtualDisplay == null) {
+                Log.e(TAG, "Failed to create VirtualDisplay")
+                stopSelf()
+                return
+            }
+            
+            Log.d(TAG, "Screen capture started successfully: ${width}x${height}")
+            
+            // Initialize AI components
+            try {
+                Log.d(TAG, "Initializing AI components...")
+                inferenceEngine = TFLiteInferenceEngine(this)
+                trajectoryPredictor = KalmanTrajectoryPredictor()
+                inferenceEngine?.warmup()
+                Log.d(TAG, "AI components initialized successfully")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to initialize AI components", e)
+                // Continue without AI for now
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting screen capture", e)
+            stopSelf()
         }
-        
-        imageReader = ImageReader.newInstance(width, height, format, 3) // Increased buffer size
-        imageReader?.setOnImageAvailableListener(imageAvailableListener, backgroundHandler)
-        
-        virtualDisplay = mediaProjection?.createVirtualDisplay(
-            "ScreenCapture",
-            width, height, density,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            imageReader?.surface,
-            null, null
-        )
-        
-        Log.d(TAG, "Screen capture started: ${width}x${height}")
     }
     
     private val imageAvailableListener = ImageReader.OnImageAvailableListener { reader ->

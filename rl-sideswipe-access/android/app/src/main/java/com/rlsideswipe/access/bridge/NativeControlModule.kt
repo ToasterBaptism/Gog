@@ -2,12 +2,15 @@ package com.rlsideswipe.access.bridge
 
 import android.Manifest
 import android.app.Activity
+import android.app.ActivityManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.provider.Settings
 import android.text.TextUtils
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.facebook.react.bridge.*
@@ -30,11 +33,15 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
                 Settings.Secure.ACCESSIBILITY_ENABLED
             )
             
+            Log.d("NativeControl", "Accessibility enabled: $accessibilityEnabled")
+            
             if (accessibilityEnabled == 1) {
                 val settingValue = Settings.Secure.getString(
                     reactApplicationContext.contentResolver,
                     Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
                 )
+                
+                Log.d("NativeControl", "Enabled services: $settingValue")
                 
                 if (!settingValue.isNullOrEmpty()) {
                     val splitter = TextUtils.SimpleStringSplitter(':')
@@ -42,15 +49,23 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
                     
                     while (splitter.hasNext()) {
                         val accessibilityService = splitter.next()
-                        if (accessibilityService.contains("com.rlsideswipe.access/.service.MainAccessibilityService")) {
+                        Log.d("NativeControl", "Checking service: $accessibilityService")
+                        
+                        // Check for multiple possible formats
+                        if (accessibilityService.contains("com.rlsideswipe.access/.service.MainAccessibilityService") ||
+                            accessibilityService.contains("com.rlsideswipe.access/com.rlsideswipe.access.service.MainAccessibilityService") ||
+                            (accessibilityService.contains("com.rlsideswipe.access") && accessibilityService.contains("MainAccessibilityService"))) {
+                            Log.d("NativeControl", "Service found: $accessibilityService")
                             promise.resolve(true)
                             return
                         }
                     }
                 }
             }
+            Log.d("NativeControl", "Service not enabled")
             promise.resolve(false)
         } catch (e: Exception) {
+            Log.e("NativeControl", "Failed to check service status", e)
             promise.reject("ERROR", "Failed to check service status", e)
         }
     }
@@ -158,45 +173,80 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
     fun hasMediaProjectionPermission(promise: Promise) {
         try {
             // MediaProjection permission can't be checked directly
-            // We'll assume it's not granted until the user goes through the flow
-            promise.resolve(false)
+            // However, we can check if the service is currently running
+            val isServiceRunning = isScreenCaptureServiceRunning()
+            Log.d("NativeControl", "ScreenCaptureService running: $isServiceRunning")
+            promise.resolve(isServiceRunning)
         } catch (e: Exception) {
+            Log.e("NativeControl", "Failed to check MediaProjection permission", e)
             promise.reject("ERROR", "Failed to check MediaProjection permission", e)
         }
+    }
+    
+    private fun isScreenCaptureServiceRunning(): Boolean {
+        try {
+            val activityManager = reactApplicationContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            for (service in activityManager.getRunningServices(Integer.MAX_VALUE)) {
+                if (ScreenCaptureService::class.java.name == service.service.className) {
+                    return true
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("NativeControl", "Error checking service status", e)
+        }
+        return false
     }
 
     @ReactMethod
     fun start(promise: Promise) {
         try {
+            Log.d("NativeControl", "Starting screen capture...")
             val activity = currentActivity
+            Log.d("NativeControl", "Current activity: $activity")
+            
             if (activity is com.rlsideswipe.access.MainActivity) {
+                Log.d("NativeControl", "Requesting MediaProjection permission...")
                 activity.requestMediaProjection { captureIntent ->
-                    if (captureIntent != null) {
-                        val serviceIntent = Intent(reactApplicationContext, ScreenCaptureService::class.java).apply {
-                            putExtra("captureIntent", captureIntent)
+                    try {
+                        if (captureIntent != null) {
+                            Log.d("NativeControl", "MediaProjection permission granted, starting service...")
+                            val serviceIntent = Intent(reactApplicationContext, ScreenCaptureService::class.java).apply {
+                                putExtra("captureIntent", captureIntent)
+                            }
+                            
+                            val result = reactApplicationContext.startForegroundService(serviceIntent)
+                            Log.d("NativeControl", "Service start result: $result")
+                            promise.resolve(null)
+                        } else {
+                            Log.e("NativeControl", "MediaProjection permission denied")
+                            promise.reject("ERROR", "MediaProjection permission denied")
                         }
-                        reactApplicationContext.startForegroundService(serviceIntent)
-                        promise.resolve(null)
-                    } else {
-                        promise.reject("ERROR", "MediaProjection permission denied")
+                    } catch (e: Exception) {
+                        Log.e("NativeControl", "Error in MediaProjection callback", e)
+                        promise.reject("ERROR", "Failed to start service: ${e.message}", e)
                     }
                 }
             } else {
+                Log.e("NativeControl", "Invalid activity type: $activity")
                 promise.reject("ERROR", "No current activity or wrong activity type")
             }
         } catch (e: Exception) {
-            promise.reject("ERROR", "Failed to start screen capture", e)
+            Log.e("NativeControl", "Failed to start screen capture", e)
+            promise.reject("ERROR", "Failed to start screen capture: ${e.message}", e)
         }
     }
 
     @ReactMethod
     fun stop(promise: Promise) {
         try {
+            Log.d("NativeControl", "Stopping screen capture service...")
             val serviceIntent = Intent(reactApplicationContext, ScreenCaptureService::class.java)
-            reactApplicationContext.stopService(serviceIntent)
+            val result = reactApplicationContext.stopService(serviceIntent)
+            Log.d("NativeControl", "Stop service result: $result")
             promise.resolve(null)
         } catch (e: Exception) {
-            promise.reject("ERROR", "Failed to stop screen capture", e)
+            Log.e("NativeControl", "Failed to stop screen capture", e)
+            promise.reject("ERROR", "Failed to stop screen capture: ${e.message}", e)
         }
     }
 }
