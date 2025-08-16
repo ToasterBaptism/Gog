@@ -134,7 +134,7 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
                     {getPermissionStatusText('android.permission.FOREGROUND_SERVICE')} Foreground Service
                   </Text>
                   <Text style={styles.permissionItem}>
-                    {getPermissionStatusText('android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION')} Screen Capture
+                    {getPermissionStatusText('android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION')} Media Projection Service
                   </Text>
                   <Text style={styles.permissionItem}>
                     {getPermissionStatusText('android.permission.VIBRATE')} Vibration

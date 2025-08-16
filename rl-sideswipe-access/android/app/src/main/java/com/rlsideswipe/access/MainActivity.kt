@@ -4,6 +4,9 @@ import android.app.Activity
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
+import android.util.Log
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
@@ -12,10 +15,8 @@ import com.rlsideswipe.access.service.ScreenCaptureService
 
 class MainActivity : ReactActivity() {
 
-    companion object {
-        const val REQUEST_MEDIA_PROJECTION = 1001
-        var pendingMediaProjectionResult: ((Intent?) -> Unit)? = null
-    }
+    private var pendingMediaProjectionResult: ((Intent?) -> Unit)? = null
+    private lateinit var mediaProjectionLauncher: ActivityResultLauncher<Intent>
 
     /**
      * Returns the name of the main component registered from JavaScript. This is used to schedule
@@ -32,29 +33,31 @@ class MainActivity : ReactActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Initialize the activity result launcher
+        mediaProjectionLauncher = registerForActivityResult(
+            ActivityResultContracts.StartActivityForResult()
+        ) { result ->
+            Log.d("MainActivity", "MediaProjection result: ${result.resultCode}")
+            val callback = pendingMediaProjectionResult
+            pendingMediaProjectionResult = null
+            
+            if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+                Log.d("MainActivity", "MediaProjection permission granted")
+                callback?.invoke(result.data)
+            } else {
+                Log.d("MainActivity", "MediaProjection permission denied")
+                callback?.invoke(null)
+            }
+        }
     }
 
     fun requestMediaProjection(callback: (Intent?) -> Unit) {
+        Log.d("MainActivity", "Requesting MediaProjection permission...")
         pendingMediaProjectionResult = callback
         val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         val captureIntent = mediaProjectionManager.createScreenCaptureIntent()
-        startActivityForResult(captureIntent, REQUEST_MEDIA_PROJECTION)
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        
-        when (requestCode) {
-            REQUEST_MEDIA_PROJECTION -> {
-                val callback = pendingMediaProjectionResult
-                pendingMediaProjectionResult = null
-                
-                if (resultCode == Activity.RESULT_OK && data != null) {
-                    callback?.invoke(data)
-                } else {
-                    callback?.invoke(null)
-                }
-            }
-        }
+        Log.d("MainActivity", "Launching MediaProjection intent...")
+        mediaProjectionLauncher.launch(captureIntent)
     }
 }
