@@ -1,7 +1,6 @@
 package com.rlsideswipe.access
 
 import android.app.Application
-import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeHost
@@ -11,15 +10,19 @@ import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.soloader.SoLoader
 import com.rlsideswipe.access.bridge.NativeControlPackage
+import com.zoontek.rnpermissions.RNPermissionsPackage
+import com.oblador.vectoricons.VectorIconsPackage
 
 class MainApplication : Application(), ReactApplication {
 
     override val reactNativeHost: ReactNativeHost =
         object : DefaultReactNativeHost(this) {
             override fun getPackages(): List<ReactPackage> {
-                val packages = PackageList(this).packages.toMutableList()
-                packages.add(NativeControlPackage())
-                return packages
+                return listOf(
+                    NativeControlPackage(),
+                    RNPermissionsPackage(),
+                    VectorIconsPackage()
+                )
             }
 
             override fun getJSMainModuleName(): String = "index"
