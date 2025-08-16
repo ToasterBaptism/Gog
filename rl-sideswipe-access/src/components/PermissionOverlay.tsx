@@ -175,6 +175,23 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
               <Text style={styles.stepNumber}>4</Text>
               <View style={styles.stepContent}>
                 <Text style={styles.stepTitle}>
+                  📹 Screen Capture Permission
+                </Text>
+                <Text style={styles.stepDescription}>
+                  Screen capture permission is granted automatically when you click "Start"
+                </Text>
+                <View style={styles.infoBox}>
+                  <Text style={styles.infoText}>
+                    ℹ️ This permission cannot be granted in advance. It will be requested when you click the "Start" button.
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.stepContainer}>
+              <Text style={styles.stepNumber}>5</Text>
+              <View style={styles.stepContent}>
+                <Text style={styles.stepTitle}>
                   {getPermissionStatusText('BATTERY_OPTIMIZATION_IGNORED')} Battery Optimization
                 </Text>
                 <Text style={styles.stepDescription}>
@@ -193,9 +210,9 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
 
             {allPermissionsGranted && (
               <View style={styles.successContainer}>
-                <Text style={styles.successText}>🎉 All permissions granted!</Text>
+                <Text style={styles.successText}>🎉 Ready to start!</Text>
                 <Text style={styles.successDescription}>
-                  You can now use the "Start" button to begin screen capture.
+                  You can now use the "Start" button. Screen capture permission will be requested automatically.
                 </Text>
               </View>
             )}
@@ -315,6 +332,19 @@ const styles = StyleSheet.create({
   successDescription: {
     fontSize: 14,
     color: '#155724',
+    textAlign: 'center',
+  },
+  infoBox: {
+    backgroundColor: '#e7f3ff',
+    borderRadius: 6,
+    padding: 10,
+    marginTop: 10,
+    borderColor: '#b3d9ff',
+    borderWidth: 1,
+  },
+  infoText: {
+    fontSize: 12,
+    color: '#0066cc',
     textAlign: 'center',
   },
   refreshButton: {

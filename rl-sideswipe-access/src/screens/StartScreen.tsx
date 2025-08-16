@@ -84,7 +84,7 @@ const StartScreen: React.FC = () => {
         setIsActive(false);
         setStatusText('Ready to start');
       } else {
-        setStatusText('Starting...');
+        setStatusText('Requesting screen capture...');
         await NativeControl.start();
         setIsActive(true);
         setStatusText('Capturing...');
@@ -117,7 +117,7 @@ const StartScreen: React.FC = () => {
       
       let errorMessage = 'Failed to start/stop service. ';
       if (error?.message?.includes('MediaProjection')) {
-        errorMessage += 'Screen capture permission was denied. Please grant permission and try again.';
+        errorMessage += 'Screen capture permission was denied. Please grant the screen capture permission when prompted and try again.';
       } else if (error?.message?.includes('accessibility')) {
         errorMessage += 'Accessibility service is not properly enabled. Please check settings.';
       } else {
