@@ -311,3 +311,31 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
         Log.d(TAG, "Inference engine closed")
     }
 }
+
+/**
+ * Stub implementation for when TensorFlow Lite fails to initialize
+ * This prevents crashes and allows the service to continue running
+ */
+class StubInferenceEngine : InferenceEngine {
+    
+    companion object {
+        private const val TAG = "StubInferenceEngine"
+    }
+    
+    init {
+        Log.w(TAG, "Using stub inference engine - no AI processing will occur")
+    }
+    
+    override fun warmup() {
+        Log.d(TAG, "Stub warmup completed")
+    }
+    
+    override fun infer(frame: Bitmap): FrameResult {
+        // Return empty result - no detection
+        return FrameResult(null, System.nanoTime())
+    }
+    
+    override fun close() {
+        Log.d(TAG, "Stub inference engine closed")
+    }
+}

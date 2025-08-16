@@ -71,17 +71,52 @@ const StartScreen: React.FC = () => {
 
     try {
       if (isActive) {
+        setStatusText('Stopping...');
         await NativeControl.stop();
         setIsActive(false);
         setStatusText('Ready to start');
       } else {
+        setStatusText('Starting...');
         await NativeControl.start();
         setIsActive(true);
         setStatusText('Capturing...');
+        
+        // Check if service actually started after a short delay
+        setTimeout(async () => {
+          try {
+            const actuallyRunning = await NativeControl.isAccessibilityServiceActuallyRunning();
+            if (!actuallyRunning) {
+              setIsActive(false);
+              setStatusText('Service failed to start');
+              Alert.alert(
+                'Service Failed', 
+                'The accessibility service failed to start properly. Please check:\n\n' +
+                '• Accessibility service is enabled\n' +
+                '• Battery optimization is disabled\n' +
+                '• Screen capture permission was granted\n\n' +
+                'Try restarting the app if the issue persists.'
+              );
+            }
+          } catch (e) {
+            console.warn('Failed to check service status:', e);
+          }
+        }, 2000);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to start/stop service:', error);
-      Alert.alert('Error', 'Failed to start/stop service. Please check permissions.');
+      setIsActive(false);
+      setStatusText('Error occurred');
+      
+      let errorMessage = 'Failed to start/stop service. ';
+      if (error?.message?.includes('MediaProjection')) {
+        errorMessage += 'Screen capture permission was denied. Please grant permission and try again.';
+      } else if (error?.message?.includes('accessibility')) {
+        errorMessage += 'Accessibility service is not properly enabled. Please check settings.';
+      } else {
+        errorMessage += 'Please check all permissions and try again.';
+      }
+      
+      Alert.alert('Error', errorMessage);
     }
   };
 

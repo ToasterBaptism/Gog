@@ -25,6 +25,7 @@ import com.rlsideswipe.access.R
 import com.rlsideswipe.access.ai.FrameResult
 import com.rlsideswipe.access.ai.InferenceEngine
 import com.rlsideswipe.access.ai.TFLiteInferenceEngine
+import com.rlsideswipe.access.ai.StubInferenceEngine
 import com.rlsideswipe.access.ai.TrajectoryPredictor
 import com.rlsideswipe.access.ai.KalmanTrajectoryPredictor
 import com.rlsideswipe.access.util.BitmapUtils
@@ -66,14 +67,7 @@ class ScreenCaptureService : Service() {
         super.onCreate()
         createNotificationChannel()
         setupBackgroundThread()
-        
-        // Initialize AI components on background thread
-        backgroundHandler?.post {
-            inferenceEngine = TFLiteInferenceEngine(this)
-            trajectoryPredictor = KalmanTrajectoryPredictor()
-            inferenceEngine?.warmup()
-            Log.d(TAG, "AI components initialized")
-        }
+        Log.d(TAG, "ScreenCaptureService created")
     }
     
     private fun setupBackgroundThread() {
@@ -94,9 +88,21 @@ class ScreenCaptureService : Service() {
             val captureIntent = intent?.getParcelableExtra<Intent>("captureIntent")
             if (captureIntent != null) {
                 Log.d(TAG, "Starting screen capture with intent")
-                startCapture(captureIntent)
+                // Start capture on background thread to prevent blocking
+                backgroundHandler?.post {
+                    try {
+                        startCapture(captureIntent)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to start capture on background thread", e)
+                        mainHandler.post {
+                            stopSelf()
+                        }
+                    }
+                }
             } else {
                 Log.e(TAG, "No capture intent provided")
+                stopSelf()
+                return START_NOT_STICKY
             }
             
             return START_STICKY
@@ -184,21 +190,50 @@ class ScreenCaptureService : Service() {
             
             Log.d(TAG, "Screen capture started successfully: ${width}x${height}")
             
-            // Initialize AI components
-            try {
-                Log.d(TAG, "Initializing AI components...")
-                inferenceEngine = TFLiteInferenceEngine(this)
-                trajectoryPredictor = KalmanTrajectoryPredictor()
-                inferenceEngine?.warmup()
-                Log.d(TAG, "AI components initialized successfully")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to initialize AI components", e)
-                // Continue without AI for now
-            }
+            // Initialize AI components safely
+            initializeAIComponents()
             
         } catch (e: Exception) {
             Log.e(TAG, "Error starting screen capture", e)
             stopSelf()
+        }
+    }
+    
+    private fun initializeAIComponents() {
+        backgroundHandler?.post {
+            try {
+                Log.d(TAG, "Initializing AI components...")
+                
+                // Initialize inference engine with error handling
+                try {
+                    inferenceEngine = TFLiteInferenceEngine(this@ScreenCaptureService)
+                    Log.d(TAG, "TensorFlow Lite inference engine created")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to create TensorFlow Lite engine, using stub", e)
+                    inferenceEngine = StubInferenceEngine()
+                }
+                
+                // Initialize trajectory predictor
+                try {
+                    trajectoryPredictor = KalmanTrajectoryPredictor()
+                    Log.d(TAG, "Kalman trajectory predictor created")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to create trajectory predictor", e)
+                    trajectoryPredictor = null
+                }
+                
+                // Warmup inference engine
+                try {
+                    inferenceEngine?.warmup()
+                    Log.d(TAG, "AI components initialized and warmed up successfully")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to warmup inference engine", e)
+                }
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to initialize AI components", e)
+                // Continue without AI - service will still capture but won't process
+            }
         }
     }
     
