@@ -16,6 +16,7 @@ interface NativeControlInterface {
   checkBatteryOptimization(): Promise<boolean>;
   openBatteryOptimizationSettings(): Promise<void>;
   isAccessibilityServiceActuallyRunning(): Promise<boolean>;
+  debugPermissionSystem(): Promise<any>;
 }
 
 const { NativeControlModule } = NativeModules;

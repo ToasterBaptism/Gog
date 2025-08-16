@@ -73,13 +73,21 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
   const isAccessibilityEnabled = permissionStatus['ACCESSIBILITY_SERVICE'] || false;
   const isOverlayEnabled = permissionStatus['SYSTEM_ALERT_WINDOW'] || false;
   const isBatteryOptimized = permissionStatus['BATTERY_OPTIMIZATION_IGNORED'] || false;
-  const hasBasicPermissions = [
+  // Only check runtime permissions that actually need to be requested
+  const hasRuntimePermissions = permissionStatus['android.permission.RECORD_AUDIO'] || false;
+  
+  // Check install-time permissions (these should always be true if app is installed)
+  const hasInstallTimePermissions = [
     'android.permission.VIBRATE',
-    'android.permission.RECORD_AUDIO',
     'android.permission.WAKE_LOCK',
     'android.permission.FOREGROUND_SERVICE',
     'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION'
   ].every(perm => permissionStatus[perm]);
+  
+  // Check notification permission for Android 13+
+  const hasNotificationPermission = permissionStatus['android.permission.POST_NOTIFICATIONS'] !== false;
+  
+  const hasBasicPermissions = hasRuntimePermissions && hasInstallTimePermissions && hasNotificationPermission;
 
   const allPermissionsGranted = isAccessibilityEnabled && isOverlayEnabled && isBatteryOptimized && hasBasicPermissions;
 
@@ -124,20 +132,25 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
                   {hasBasicPermissions ? '✅' : '❌'} App Permissions
                 </Text>
                 <Text style={styles.stepDescription}>
-                  Grant microphone, foreground service, and notification permissions
+                  Grant microphone and notification permissions
                 </Text>
                 <View style={styles.permissionList}>
                   <Text style={styles.permissionItem}>
-                    {getPermissionStatusText('android.permission.RECORD_AUDIO')} Microphone
+                    {getPermissionStatusText('android.permission.RECORD_AUDIO')} Microphone (Runtime)
+                  </Text>
+                  {permissionStatus['android.permission.POST_NOTIFICATIONS'] !== undefined && (
+                    <Text style={styles.permissionItem}>
+                      {getPermissionStatusText('android.permission.POST_NOTIFICATIONS')} Notifications (Runtime)
+                    </Text>
+                  )}
+                  <Text style={styles.permissionItem}>
+                    {getPermissionStatusText('android.permission.FOREGROUND_SERVICE')} Foreground Service (Install-time)
                   </Text>
                   <Text style={styles.permissionItem}>
-                    {getPermissionStatusText('android.permission.FOREGROUND_SERVICE')} Foreground Service
+                    {getPermissionStatusText('android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION')} Media Projection Service (Install-time)
                   </Text>
                   <Text style={styles.permissionItem}>
-                    {getPermissionStatusText('android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION')} Media Projection Service
-                  </Text>
-                  <Text style={styles.permissionItem}>
-                    {getPermissionStatusText('android.permission.VIBRATE')} Vibration
+                    {getPermissionStatusText('android.permission.VIBRATE')} Vibration (Install-time)
                   </Text>
                 </View>
                 <TouchableOpacity
