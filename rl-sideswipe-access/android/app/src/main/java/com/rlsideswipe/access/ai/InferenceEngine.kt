@@ -60,14 +60,23 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
     }
     
     init {
-        loadModel()
-        initializeBuffers()
-        createHanningWindow()
+        try {
+            loadModel()
+            initializeBuffers()
+            createHanningWindow()
+            Log.d(TAG, "TFLiteInferenceEngine initialized successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize TFLiteInferenceEngine", e)
+            throw e // Re-throw to trigger fallback to StubInferenceEngine
+        }
     }
     
     private fun loadModel() {
         try {
+            Log.d(TAG, "Loading TensorFlow Lite model...")
             val modelBuffer = loadModelFile()
+            Log.d(TAG, "Model file loaded, size: ${modelBuffer.remaining()} bytes")
+            
             val options = Interpreter.Options()
             
             // Set number of threads for CPU inference
@@ -87,13 +96,22 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
                     tryNnApiDelegate(options)
                 }
             } else {
+                Log.d(TAG, "GPU delegate not supported, trying NNAPI")
                 tryNnApiDelegate(options)
             }
             
             interpreter = Interpreter(modelBuffer, options)
-            Log.d(TAG, "Model loaded successfully")
+            Log.d(TAG, "TensorFlow Lite interpreter created successfully")
+            
+            // Verify model input/output shapes
+            val inputShape = interpreter?.getInputTensor(0)?.shape()
+            val outputShape = interpreter?.getOutputTensor(0)?.shape()
+            Log.d(TAG, "Model input shape: ${inputShape?.contentToString()}")
+            Log.d(TAG, "Model output shape: ${outputShape?.contentToString()}")
+            
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to load model", e)
+            Log.e(TAG, "Failed to load TensorFlow Lite model", e)
+            throw e // Re-throw to trigger fallback
         }
     }
     
@@ -144,12 +162,27 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
     }
     
     private fun loadModelFile(): MappedByteBuffer {
-        val assetFileDescriptor = context.assets.openFd(MODEL_FILE)
-        val inputStream = FileInputStream(assetFileDescriptor.fileDescriptor)
-        val fileChannel = inputStream.channel
-        val startOffset = assetFileDescriptor.startOffset
-        val declaredLength = assetFileDescriptor.declaredLength
-        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
+        try {
+            Log.d(TAG, "Opening model file: $MODEL_FILE")
+            val assetFileDescriptor = context.assets.openFd(MODEL_FILE)
+            Log.d(TAG, "Asset file descriptor: length=${assetFileDescriptor.declaredLength}, offset=${assetFileDescriptor.startOffset}")
+            
+            val inputStream = FileInputStream(assetFileDescriptor.fileDescriptor)
+            val fileChannel = inputStream.channel
+            val startOffset = assetFileDescriptor.startOffset
+            val declaredLength = assetFileDescriptor.declaredLength
+            
+            if (declaredLength <= 0) {
+                throw IllegalStateException("Model file is empty or invalid: length=$declaredLength")
+            }
+            
+            val buffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
+            Log.d(TAG, "Model file mapped successfully: ${buffer.remaining()} bytes")
+            return buffer
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load model file: $MODEL_FILE", e)
+            throw e
+        }
     }
     
     override fun warmup() {
