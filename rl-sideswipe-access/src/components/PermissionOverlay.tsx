@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Modal,
+  ScrollView,
 } from 'react-native';
 import NativeControl from '../lib/bridge/NativeControl';
 
@@ -13,133 +14,204 @@ interface PermissionOverlayProps {
   onClose: () => void;
 }
 
+interface PermissionStatus {
+  [key: string]: boolean;
+}
+
 const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
   visible,
   onClose,
 }) => {
-  const [serviceEnabled, setServiceEnabled] = useState(false);
-  const [serviceActuallyRunning, setServiceActuallyRunning] = useState(false);
-  const [permissionsGranted, setPermissionsGranted] = useState(false);
-  const [batteryOptimized, setBatteryOptimized] = useState(true);
+  const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>({});
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (visible) {
-      checkStatus();
+      checkPermissions();
     }
   }, [visible]);
 
-  const checkStatus = async () => {
+  const checkPermissions = async () => {
     try {
-      const enabled = await NativeControl.isServiceEnabled();
-      const actuallyRunning = await NativeControl.isAccessibilityServiceActuallyRunning();
-      const permissions = await NativeControl.checkPermissions();
-      const batteryIgnored = await NativeControl.checkBatteryOptimization();
-      
-      setServiceEnabled(enabled);
-      setServiceActuallyRunning(actuallyRunning);
-      setPermissionsGranted(permissions);
-      setBatteryOptimized(!batteryIgnored);
-      
-      console.log('Status check:', { enabled, actuallyRunning, permissions, batteryIgnored });
+      const status = await NativeControl.getDetailedPermissionStatus();
+      setPermissionStatus(status);
+      console.log('Detailed permission status:', status);
     } catch (error) {
-      console.error('Failed to check status:', error);
+      console.error('Failed to check permissions:', error);
     }
   };
 
-  const handleEnableAccessibility = () => {
+  const handleAccessibilitySettings = () => {
     NativeControl.openAccessibilitySettings();
   };
 
   const handleRequestPermissions = async () => {
     try {
+      setLoading(true);
       await NativeControl.requestPermissions();
-      // Check status after a delay to see if permissions were granted
-      setTimeout(checkStatus, 1000);
+      // Wait a bit for permissions to be processed
+      setTimeout(checkPermissions, 1000);
     } catch (error) {
       console.error('Failed to request permissions:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleBatteryOptimization = () => {
-    NativeControl.openBatteryOptimizationSettings();
+  const handleBatteryOptimization = async () => {
+    try {
+      await NativeControl.openBatteryOptimizationSettings();
+    } catch (error) {
+      console.error('Failed to open battery optimization settings:', error);
+    }
   };
+
+  const getPermissionStatusText = (key: string): string => {
+    return permissionStatus[key] ? '✅' : '❌';
+  };
+
+  const isAccessibilityEnabled = permissionStatus['ACCESSIBILITY_SERVICE'] || false;
+  const isOverlayEnabled = permissionStatus['SYSTEM_ALERT_WINDOW'] || false;
+  const isBatteryOptimized = permissionStatus['BATTERY_OPTIMIZATION_IGNORED'] || false;
+  const hasBasicPermissions = [
+    'android.permission.VIBRATE',
+    'android.permission.RECORD_AUDIO',
+    'android.permission.WAKE_LOCK',
+    'android.permission.FOREGROUND_SERVICE',
+    'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION'
+  ].every(perm => permissionStatus[perm]);
+
+  const allPermissionsGranted = isAccessibilityEnabled && isOverlayEnabled && isBatteryOptimized && hasBasicPermissions;
 
   return (
     <Modal
       visible={visible}
-      transparent
+      transparent={true}
       animationType="fade"
       onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.container}>
-          <Text style={styles.title}>Setup Required</Text>
-          
-          <View style={styles.step}>
-            <Text style={[styles.stepNumber, serviceEnabled && serviceActuallyRunning && styles.stepCompleted]}>
-              {serviceEnabled && serviceActuallyRunning ? '✓' : '1.'}
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <Text style={styles.title}>Setup Required</Text>
+            <Text style={styles.description}>
+              Complete all steps below to use RL Sideswipe Access:
             </Text>
-            <Text style={styles.stepText}>Enable Accessibility Service</Text>
-            {serviceEnabled && !serviceActuallyRunning && (
-              <Text style={styles.warningText}>
-                ⚠️ Service enabled but not running - may be killed by system
-              </Text>
-            )}
-            <TouchableOpacity
-              style={[styles.button, serviceEnabled && serviceActuallyRunning && styles.buttonCompleted]}
-              onPress={handleEnableAccessibility}
-              disabled={serviceEnabled && serviceActuallyRunning}>
-              <Text style={styles.buttonText}>
-                {serviceEnabled && serviceActuallyRunning ? 'Completed' : 'Open Settings'}
-              </Text>
-            </TouchableOpacity>
-          </View>
 
-          <View style={styles.step}>
-            <Text style={[styles.stepNumber, permissionsGranted && styles.stepCompleted]}>
-              {permissionsGranted ? '✓' : '2.'}
-            </Text>
-            <Text style={styles.stepText}>Grant App Permissions</Text>
-            <Text style={styles.stepSubtext}>
-              Microphone, Vibration, Notifications, Overlay
-            </Text>
-            <TouchableOpacity
-              style={[styles.button, permissionsGranted && styles.buttonCompleted]}
-              onPress={handleRequestPermissions}
-              disabled={permissionsGranted}>
-              <Text style={styles.buttonText}>
-                {permissionsGranted ? 'Completed' : 'Grant Permissions'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.step}>
-            <Text style={[styles.stepNumber, !batteryOptimized && styles.stepCompleted]}>
-              {!batteryOptimized ? '✓' : '3.'}
-            </Text>
-            <Text style={styles.stepText}>Disable Battery Optimization</Text>
-            <Text style={styles.stepSubtext}>
-              Prevents Android from killing the accessibility service
-            </Text>
-            <TouchableOpacity
-              style={[styles.button, !batteryOptimized && styles.buttonCompleted]}
-              onPress={handleBatteryOptimization}
-              disabled={!batteryOptimized}>
-              <Text style={styles.buttonText}>
-                {!batteryOptimized ? 'Completed' : 'Open Settings'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {serviceEnabled && serviceActuallyRunning && permissionsGranted && !batteryOptimized && (
-            <View style={styles.successMessage}>
-              <Text style={styles.successText}>✅ All setup completed!</Text>
-              <Text style={styles.successSubtext}>Your accessibility service should stay active</Text>
+            <View style={styles.stepContainer}>
+              <Text style={styles.stepNumber}>1</Text>
+              <View style={styles.stepContent}>
+                <Text style={styles.stepTitle}>
+                  {getPermissionStatusText('ACCESSIBILITY_SERVICE')} Accessibility Service
+                </Text>
+                <Text style={styles.stepDescription}>
+                  Enable "RL Sideswipe Access" in Accessibility settings
+                </Text>
+                <TouchableOpacity
+                  style={[styles.button, isAccessibilityEnabled && styles.buttonDisabled]}
+                  onPress={handleAccessibilitySettings}
+                  disabled={isAccessibilityEnabled}>
+                  <Text style={styles.buttonText}>
+                    {isAccessibilityEnabled ? 'Enabled' : 'Open Settings'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          )}
 
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Text style={styles.closeButtonText}>Cancel</Text>
-          </TouchableOpacity>
+            <View style={styles.stepContainer}>
+              <Text style={styles.stepNumber}>2</Text>
+              <View style={styles.stepContent}>
+                <Text style={styles.stepTitle}>
+                  {hasBasicPermissions ? '✅' : '❌'} App Permissions
+                </Text>
+                <Text style={styles.stepDescription}>
+                  Grant microphone, foreground service, and notification permissions
+                </Text>
+                <View style={styles.permissionList}>
+                  <Text style={styles.permissionItem}>
+                    {getPermissionStatusText('android.permission.RECORD_AUDIO')} Microphone
+                  </Text>
+                  <Text style={styles.permissionItem}>
+                    {getPermissionStatusText('android.permission.FOREGROUND_SERVICE')} Foreground Service
+                  </Text>
+                  <Text style={styles.permissionItem}>
+                    {getPermissionStatusText('android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION')} Screen Capture
+                  </Text>
+                  <Text style={styles.permissionItem}>
+                    {getPermissionStatusText('android.permission.VIBRATE')} Vibration
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.button, hasBasicPermissions && styles.buttonDisabled]}
+                  onPress={handleRequestPermissions}
+                  disabled={loading || hasBasicPermissions}>
+                  <Text style={styles.buttonText}>
+                    {loading ? 'Requesting...' : hasBasicPermissions ? 'Granted' : 'Grant Permissions'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.stepContainer}>
+              <Text style={styles.stepNumber}>3</Text>
+              <View style={styles.stepContent}>
+                <Text style={styles.stepTitle}>
+                  {getPermissionStatusText('SYSTEM_ALERT_WINDOW')} Overlay Permission
+                </Text>
+                <Text style={styles.stepDescription}>
+                  Allow app to display overlay for ball tracking
+                </Text>
+                <TouchableOpacity
+                  style={[styles.button, isOverlayEnabled && styles.buttonDisabled]}
+                  onPress={handleRequestPermissions}
+                  disabled={isOverlayEnabled}>
+                  <Text style={styles.buttonText}>
+                    {isOverlayEnabled ? 'Granted' : 'Grant Overlay'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.stepContainer}>
+              <Text style={styles.stepNumber}>4</Text>
+              <View style={styles.stepContent}>
+                <Text style={styles.stepTitle}>
+                  {getPermissionStatusText('BATTERY_OPTIMIZATION_IGNORED')} Battery Optimization
+                </Text>
+                <Text style={styles.stepDescription}>
+                  Disable battery optimization to prevent service interruption
+                </Text>
+                <TouchableOpacity
+                  style={[styles.button, isBatteryOptimized && styles.buttonDisabled]}
+                  onPress={handleBatteryOptimization}
+                  disabled={isBatteryOptimized}>
+                  <Text style={styles.buttonText}>
+                    {isBatteryOptimized ? 'Disabled' : 'Battery Settings'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {allPermissionsGranted && (
+              <View style={styles.successContainer}>
+                <Text style={styles.successText}>🎉 All permissions granted!</Text>
+                <Text style={styles.successDescription}>
+                  You can now use the "Start" button to begin screen capture.
+                </Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={styles.refreshButton}
+              onPress={checkPermissions}>
+              <Text style={styles.refreshButtonText}>🔄 Refresh Status</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={onClose}>
+              <Text style={styles.closeButtonText}>Done</Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -156,86 +228,119 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
-    padding: 24,
+    padding: 20,
     margin: 20,
-    minWidth: 300,
+    maxHeight: '90%',
+    width: '90%',
   },
   title: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 24,
     color: '#333333',
+    textAlign: 'center',
+    marginBottom: 10,
   },
-  step: {
+  description: {
+    fontSize: 16,
+    color: '#666666',
+    textAlign: 'center',
     marginBottom: 20,
+  },
+  stepContainer: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    padding: 15,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
   },
   stepNumber: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#007AFF',
-    marginBottom: 8,
+    marginRight: 15,
+    minWidth: 25,
   },
-  stepCompleted: {
-    color: '#28a745',
+  stepContent: {
+    flex: 1,
   },
-  stepText: {
+  stepTitle: {
     fontSize: 16,
+    fontWeight: 'bold',
     color: '#333333',
-    marginBottom: 4,
+    marginBottom: 5,
   },
-  stepSubtext: {
+  stepDescription: {
+    fontSize: 14,
+    color: '#666666',
+    marginBottom: 10,
+  },
+  permissionList: {
+    marginBottom: 10,
+  },
+  permissionItem: {
     fontSize: 12,
     color: '#666666',
-    marginBottom: 12,
-  },
-  warningText: {
-    fontSize: 12,
-    color: '#ff6b35',
-    marginBottom: 8,
-    fontWeight: '500',
+    marginBottom: 2,
   },
   button: {
     backgroundColor: '#007AFF',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    alignItems: 'center',
+    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    alignSelf: 'flex-start',
   },
-  buttonCompleted: {
+  buttonDisabled: {
     backgroundColor: '#28a745',
   },
   buttonText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
-  successMessage: {
+  successContainer: {
     backgroundColor: '#d4edda',
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 20,
     borderColor: '#c3e6cb',
     borderWidth: 1,
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
-    alignItems: 'center',
   },
   successText: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#155724',
-    marginBottom: 4,
+    textAlign: 'center',
+    marginBottom: 5,
   },
-  successSubtext: {
+  successDescription: {
     fontSize: 14,
     color: '#155724',
+    textAlign: 'center',
+  },
+  refreshButton: {
+    backgroundColor: '#6c757d',
+    borderRadius: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    alignSelf: 'center',
+    marginBottom: 15,
+  },
+  refreshButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   closeButton: {
-    marginTop: 12,
-    alignItems: 'center',
+    backgroundColor: '#dc3545',
+    borderRadius: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    alignSelf: 'center',
   },
   closeButtonText: {
-    color: '#666666',
+    color: '#ffffff',
     fontSize: 16,
+    fontWeight: '600',
   },
 });
 

@@ -37,6 +37,14 @@ const StartScreen: React.FC = () => {
       const permissions = await NativeControl.checkPermissions();
       const batteryIgnored = await NativeControl.checkBatteryOptimization();
       
+      // Get detailed permission status for better debugging
+      try {
+        const detailedStatus = await NativeControl.getDetailedPermissionStatus();
+        console.log('Detailed permission status:', detailedStatus);
+      } catch (e) {
+        console.warn('Could not get detailed permission status:', e);
+      }
+      
       setServiceEnabled(enabled);
       setPermissionsGranted(permissions);
       

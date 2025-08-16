@@ -94,6 +94,8 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
             runtimePermissions.add(Manifest.permission.VIBRATE)
             runtimePermissions.add(Manifest.permission.RECORD_AUDIO)
             runtimePermissions.add(Manifest.permission.WAKE_LOCK)
+            runtimePermissions.add(Manifest.permission.FOREGROUND_SERVICE)
+            runtimePermissions.add(Manifest.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION)
             
             // Check notification permission for Android 13+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -105,6 +107,7 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
                 if (ContextCompat.checkSelfPermission(reactApplicationContext, permission) 
                     != PackageManager.PERMISSION_GRANTED) {
                     missingPermissions.add(permission)
+                    Log.d("NativeControl", "Missing permission: $permission")
                 }
             }
             
@@ -112,11 +115,14 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 if (!Settings.canDrawOverlays(reactApplicationContext)) {
                     missingPermissions.add("SYSTEM_ALERT_WINDOW")
+                    Log.d("NativeControl", "Missing permission: SYSTEM_ALERT_WINDOW")
                 }
             }
             
+            Log.d("NativeControl", "Permission check complete. Missing: ${missingPermissions.size}")
             promise.resolve(missingPermissions.isEmpty())
         } catch (e: Exception) {
+            Log.e("NativeControl", "Failed to check permissions", e)
             promise.reject("ERROR", "Failed to check permissions", e)
         }
     }
@@ -133,6 +139,8 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
                 runtimePermissions.add(Manifest.permission.VIBRATE)
                 runtimePermissions.add(Manifest.permission.RECORD_AUDIO)
                 runtimePermissions.add(Manifest.permission.WAKE_LOCK)
+                runtimePermissions.add(Manifest.permission.FOREGROUND_SERVICE)
+                runtimePermissions.add(Manifest.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION)
                 
                 // Check notification permission for Android 13+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -144,20 +152,28 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
                     if (ContextCompat.checkSelfPermission(reactApplicationContext, permission) 
                         != PackageManager.PERMISSION_GRANTED) {
                         requiredPermissions.add(permission)
+                        Log.d("NativeControl", "Requesting permission: $permission")
                     }
                 }
                 
                 // Request runtime permissions if any are missing
                 if (requiredPermissions.isNotEmpty()) {
+                    Log.d("NativeControl", "Requesting ${requiredPermissions.size} runtime permissions")
                     ActivityCompat.requestPermissions(activity, requiredPermissions.toTypedArray(), REQUEST_PERMISSIONS)
+                } else {
+                    Log.d("NativeControl", "All runtime permissions already granted")
                 }
                 
                 // Handle system alert window permission separately
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(reactApplicationContext)) {
+                    Log.d("NativeControl", "Requesting overlay permission")
                     val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                        data = android.net.Uri.parse("package:${reactApplicationContext.packageName}")
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
                     reactApplicationContext.startActivity(intent)
+                } else {
+                    Log.d("NativeControl", "Overlay permission already granted")
                 }
                 
                 promise.resolve(null)
@@ -165,7 +181,97 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
                 promise.reject("ERROR", "No current activity")
             }
         } catch (e: Exception) {
+            Log.e("NativeControl", "Failed to request permissions", e)
             promise.reject("ERROR", "Failed to request permissions", e)
+        }
+    }
+
+    @ReactMethod
+    fun getDetailedPermissionStatus(promise: Promise) {
+        try {
+            val permissionStatus = mutableMapOf<String, Boolean>()
+            
+            // Check runtime permissions
+            val runtimePermissions = listOf(
+                Manifest.permission.VIBRATE,
+                Manifest.permission.RECORD_AUDIO,
+                Manifest.permission.WAKE_LOCK,
+                Manifest.permission.FOREGROUND_SERVICE,
+                Manifest.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION
+            )
+            
+            for (permission in runtimePermissions) {
+                val granted = ContextCompat.checkSelfPermission(reactApplicationContext, permission) == PackageManager.PERMISSION_GRANTED
+                permissionStatus[permission] = granted
+                Log.d("NativeControl", "Permission $permission: $granted")
+            }
+            
+            // Check notification permission for Android 13+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val notificationGranted = ContextCompat.checkSelfPermission(reactApplicationContext, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                permissionStatus[Manifest.permission.POST_NOTIFICATIONS] = notificationGranted
+                Log.d("NativeControl", "Permission POST_NOTIFICATIONS: $notificationGranted")
+            }
+            
+            // Check system alert window permission
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val overlayGranted = Settings.canDrawOverlays(reactApplicationContext)
+                permissionStatus["SYSTEM_ALERT_WINDOW"] = overlayGranted
+                Log.d("NativeControl", "Permission SYSTEM_ALERT_WINDOW: $overlayGranted")
+            }
+            
+            // Check accessibility service
+            val accessibilityEnabled = isAccessibilityServiceEnabled()
+            permissionStatus["ACCESSIBILITY_SERVICE"] = accessibilityEnabled
+            Log.d("NativeControl", "Accessibility service enabled: $accessibilityEnabled")
+            
+            // Check battery optimization
+            val batteryOptimized = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val powerManager = reactApplicationContext.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+                powerManager.isIgnoringBatteryOptimizations(reactApplicationContext.packageName)
+            } else {
+                true
+            }
+            permissionStatus["BATTERY_OPTIMIZATION_IGNORED"] = batteryOptimized
+            Log.d("NativeControl", "Battery optimization ignored: $batteryOptimized")
+            
+            promise.resolve(Arguments.makeNativeMap(permissionStatus as Map<String, Any>))
+        } catch (e: Exception) {
+            Log.e("NativeControl", "Failed to get detailed permission status", e)
+            promise.reject("ERROR", "Failed to get detailed permission status", e)
+        }
+    }
+    
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        try {
+            val accessibilityEnabled = Settings.Secure.getInt(
+                reactApplicationContext.contentResolver,
+                Settings.Secure.ACCESSIBILITY_ENABLED
+            )
+            
+            if (accessibilityEnabled == 1) {
+                val settingValue = Settings.Secure.getString(
+                    reactApplicationContext.contentResolver,
+                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+                )
+                
+                if (!settingValue.isNullOrEmpty()) {
+                    val splitter = TextUtils.SimpleStringSplitter(':')
+                    splitter.setString(settingValue)
+                    
+                    while (splitter.hasNext()) {
+                        val accessibilityService = splitter.next()
+                        if (accessibilityService.contains("com.rlsideswipe.access") && 
+                            accessibilityService.contains("MainAccessibilityService")) {
+                            return true
+                        }
+                    }
+                }
+            }
+            return false
+        } catch (e: Exception) {
+            Log.e("NativeControl", "Failed to check accessibility service", e)
+            return false
         }
     }
 
