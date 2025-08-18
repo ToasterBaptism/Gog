@@ -95,8 +95,7 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
             val installTimePermissions = listOf(
                 Manifest.permission.VIBRATE,
                 Manifest.permission.WAKE_LOCK,
-                Manifest.permission.FOREGROUND_SERVICE,
-                Manifest.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION
+                Manifest.permission.FOREGROUND_SERVICE
             )
             
             // Check notification permission for Android 13+
