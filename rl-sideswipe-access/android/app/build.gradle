@@ -15,9 +15,6 @@ react {
     // codegenDir = file("../node_modules/@react-native/codegen")
     //   The cli.js file which is the React Native CLI entrypoint. Default is ../node_modules/react-native/cli.js
     // cliFile = file("../node_modules/react-native/cli.js")
-    
-    /* Autolinking */
-    // Autolinking disabled - using manual configuration
 
     /* Variants */
     //   The list of variants to that are debuggable. For those we're going to
@@ -115,18 +112,17 @@ dependencies {
     // MediaPipe Tasks Vision
     implementation "com.google.mediapipe:tasks-vision:0.10.14"
     
-    // OpenCV module (disabled due to Kotlin compatibility issues with newer versions)
-    // implementation project(':opencv')
-    // TODO: Re-enable OpenCV integration after resolving Kotlin compatibility
+    // OpenCV (commented out for initial build)
+    // implementation files('libs/opencv-480.jar')
     
     // Audio
     implementation "androidx.media:media:1.7.0"
-    
-    // Manual React Native module dependencies (autolinking disabled)
-    implementation project(':react-native-permissions')
-    implementation project(':react-native-vector-icons')
 
     implementation("com.facebook.react:react-android")
+
+    // Manual React Native module dependencies - autolinking disabled
+    implementation project(':react-native-permissions')
+    implementation project(':react-native-vector-icons')
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
@@ -135,4 +131,16 @@ dependencies {
     }
 }
 
-apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesAppBuildGradle(project)
+// Task to clean up autolinking generated files
+task cleanAutolinking {
+    doLast {
+        delete fileTree(dir: "$buildDir/generated/autolinking", include: '**/*')
+    }
+}
+
+// Run before compilation
+tasks.whenTaskAdded { task ->
+    if (task.name.contains('compile') && task.name.contains('Java')) {
+        task.dependsOn cleanAutolinking
+    }
+}

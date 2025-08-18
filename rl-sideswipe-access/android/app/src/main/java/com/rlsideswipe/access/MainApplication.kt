@@ -1,6 +1,7 @@
 package com.rlsideswipe.access
 
 import android.app.Application
+import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeHost
@@ -18,11 +19,15 @@ class MainApplication : Application(), ReactApplication {
     override val reactNativeHost: ReactNativeHost =
         object : DefaultReactNativeHost(this) {
             override fun getPackages(): List<ReactPackage> {
-                return listOf(
-                    NativeControlPackage(),
-                    RNPermissionsPackage(),
-                    VectorIconsPackage()
-                )
+                // Start with empty autolinking packages
+                val packages = PackageList(this@MainApplication).packages.toMutableList()
+                
+                // Add our manual packages
+                packages.add(NativeControlPackage())
+                packages.add(RNPermissionsPackage())
+                packages.add(VectorIconsPackage())
+                
+                return packages
             }
 
             override fun getJSMainModuleName(): String = "index"

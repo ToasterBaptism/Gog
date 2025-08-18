@@ -68,3 +68,7 @@ buck-out/
 
 # Testing
 /coverage
+
+# OpenCV Android SDK (can be downloaded separately)
+android/app/libs/OpenCV-android-sdk/
+android/opencv/
