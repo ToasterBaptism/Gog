@@ -80,8 +80,7 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
   const hasInstallTimePermissions = [
     'android.permission.VIBRATE',
     'android.permission.WAKE_LOCK',
-    'android.permission.FOREGROUND_SERVICE',
-    'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION'
+    'android.permission.FOREGROUND_SERVICE'
   ].every(perm => permissionStatus[perm]);
   
   // Check notification permission for Android 13+
@@ -146,11 +145,12 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
                   <Text style={styles.permissionItem}>
                     {getPermissionStatusText('android.permission.FOREGROUND_SERVICE')} Foreground Service (Install-time)
                   </Text>
-                  <Text style={styles.permissionItem}>
-                    {getPermissionStatusText('android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION')} Media Projection Service (Install-time)
-                  </Text>
+
                   <Text style={styles.permissionItem}>
                     {getPermissionStatusText('android.permission.VIBRATE')} Vibration (Install-time)
+                  </Text>
+                  <Text style={styles.permissionItem}>
+                    {getPermissionStatusText('android.permission.WAKE_LOCK')} Wake Lock (Install-time)
                   </Text>
                 </View>
                 <TouchableOpacity
