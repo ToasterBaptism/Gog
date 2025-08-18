@@ -116,15 +116,32 @@ const StartScreen: React.FC = () => {
       setStatusText('Error occurred');
       
       let errorMessage = 'Failed to start/stop service. ';
-      if (error?.message?.includes('MediaProjection')) {
-        errorMessage += 'Screen capture permission was denied. Please grant the screen capture permission when prompted and try again.';
+      let errorTitle = 'Error';
+      
+      if (error?.message?.includes('Screen capture permission denied')) {
+        errorTitle = 'Permission Denied';
+        errorMessage = 'Screen capture permission was denied. To use this app, you need to:\n\n' +
+                      '1. Tap "Start" again\n' +
+                      '2. When the system dialog appears, tap "Start now"\n' +
+                      '3. Do not tap "Cancel" or press the back button\n\n' +
+                      'The screen capture permission is required for the app to detect the ball.';
+      } else if (error?.message?.includes('MediaProjection not supported')) {
+        errorTitle = 'Not Supported';
+        errorMessage = 'Screen capture is not supported on this device. This app requires Android 5.0 (API 21) or higher with MediaProjection support.';
+      } else if (error?.message?.includes('Invalid activity context')) {
+        errorTitle = 'App State Error';
+        errorMessage = 'The app is not in the correct state. Please:\n\n' +
+                      '1. Make sure the app is in the foreground\n' +
+                      '2. Try closing and reopening the app\n' +
+                      '3. Restart your device if the problem persists';
       } else if (error?.message?.includes('accessibility')) {
-        errorMessage += 'Accessibility service is not properly enabled. Please check settings.';
+        errorTitle = 'Accessibility Service';
+        errorMessage = 'Accessibility service is not properly enabled. Please check settings.';
       } else {
-        errorMessage += 'Please check all permissions and try again.';
+        errorMessage += `Please check all permissions and try again.\n\nTechnical details: ${error?.message || 'Unknown error'}`;
       }
       
-      Alert.alert('Error', errorMessage);
+      Alert.alert(errorTitle, errorMessage);
     }
   };
 

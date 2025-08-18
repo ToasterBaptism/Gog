@@ -55,9 +55,45 @@ class MainActivity : ReactActivity() {
     fun requestMediaProjection(callback: (Intent?) -> Unit) {
         Log.d("MainActivity", "Requesting MediaProjection permission...")
         pendingMediaProjectionResult = callback
-        val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        val captureIntent = mediaProjectionManager.createScreenCaptureIntent()
-        Log.d("MainActivity", "Launching MediaProjection intent...")
-        mediaProjectionLauncher.launch(captureIntent)
+        
+        try {
+            val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as? MediaProjectionManager
+            if (mediaProjectionManager == null) {
+                Log.e("MainActivity", "MediaProjectionManager is null")
+                callback(null)
+                return
+            }
+            
+            val captureIntent = mediaProjectionManager.createScreenCaptureIntent()
+            Log.d("MainActivity", "Created screen capture intent: $captureIntent")
+            Log.d("MainActivity", "Intent action: ${captureIntent.action}")
+            Log.d("MainActivity", "Intent component: ${captureIntent.component}")
+            
+            // Add timeout to detect if dialog never appears
+            val timeoutHandler = android.os.Handler(android.os.Looper.getMainLooper())
+            val timeoutRunnable = Runnable {
+                if (pendingMediaProjectionResult != null) {
+                    Log.w("MainActivity", "MediaProjection dialog timeout - no response after 30 seconds")
+                    val callback = pendingMediaProjectionResult
+                    pendingMediaProjectionResult = null
+                    callback?.invoke(null)
+                }
+            }
+            timeoutHandler.postDelayed(timeoutRunnable, 30000) // 30 second timeout
+            
+            Log.d("MainActivity", "Launching MediaProjection intent...")
+            mediaProjectionLauncher.launch(captureIntent)
+            
+            // Cancel timeout if we get a response
+            val originalCallback = callback
+            pendingMediaProjectionResult = { result ->
+                timeoutHandler.removeCallbacks(timeoutRunnable)
+                originalCallback(result)
+            }
+            
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Exception in requestMediaProjection", e)
+            callback(null)
+        }
     }
 }
