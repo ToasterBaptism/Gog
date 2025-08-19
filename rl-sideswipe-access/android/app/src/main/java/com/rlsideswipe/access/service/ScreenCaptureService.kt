@@ -33,6 +33,10 @@ import com.rlsideswipe.access.ai.StubInferenceEngine
 import com.rlsideswipe.access.ai.TrajectoryPredictor
 import com.rlsideswipe.access.ai.KalmanTrajectoryPredictor
 import com.rlsideswipe.access.util.BitmapUtils
+import kotlin.math.sqrt
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.abs
 
 // Helper data class for search area bounds
 data class Tuple4(val first: Int, val second: Int, val third: Int, val fourth: Int)
@@ -404,14 +408,9 @@ class ScreenCaptureService : Service() {
     
     private fun detectBallSimple(bitmap: Bitmap): FrameResult? {
         return try {
-            // Enhanced color-based ball detection for multiple ball colors
+            // Shape-based ball detection using circular object detection
             val width = bitmap.width
             val height = bitmap.height
-            
-            // Sample pixels to find ball-colored circular objects
-            var bestX = -1f
-            var bestY = -1f
-            var maxBallPixels = 0
             
             // Adjust search area based on orientation
             val (searchStartX, searchEndX, searchStartY, searchEndY) = if (isLandscapeMode) {
@@ -432,101 +431,267 @@ class ScreenCaptureService : Service() {
             
             Log.d(TAG, "🔍 Search area: X($searchStartX-$searchEndX), Y($searchStartY-$searchEndY) [${if (isLandscapeMode) "LANDSCAPE" else "PORTRAIT"}]")
             
-            // Grid search for ball-colored regions in focused area
-            val gridSize = 30 // Smaller grid for better precision
-            var detectionRegions = mutableListOf<String>()
+            // Detect circular objects (balls) using shape analysis
+            val detectedCircles = detectCircularObjects(bitmap, searchStartX, searchEndX, searchStartY, searchEndY)
             
-            for (y in searchStartY until searchEndY step gridSize) {
-                for (x in searchStartX until searchEndX step gridSize) {
-                    val ballPixelCount = countBallPixelsInRegion(bitmap, x, y, gridSize)
-                    if (ballPixelCount > 5) { // Log any significant detection
-                        detectionRegions.add("($x,$y):$ballPixelCount")
-                    }
-                    if (ballPixelCount > maxBallPixels) {
-                        maxBallPixels = ballPixelCount
-                        bestX = x.toFloat() + gridSize / 2f
-                        bestY = y.toFloat() + gridSize / 2f
-                    }
-                }
-            }
-            
-            // Log detection regions for debugging
-            if (detectionRegions.isNotEmpty()) {
-                Log.d(TAG, "🔍 DETECTION REGIONS: ${detectionRegions.take(5).joinToString(", ")}")
-            }
-            
-            if (maxBallPixels > 10) { // Found potential ball
-                Log.d(TAG, "Ball detected at ($bestX, $bestY) with $maxBallPixels ball-colored pixels")
+            if (detectedCircles.isNotEmpty()) {
+                // Find the best ball candidate based on size, position, and circularity
+                val bestBall = findBestBallCandidate(detectedCircles, width, height)
                 
-                // Add to ball tracking history
-                val currentTime = System.currentTimeMillis()
-                addBallToHistory(bestX, bestY, currentTime)
-                
-                // Always show current ball position for debugging
-                Log.d(TAG, "🎯 BALL DETECTED: Position ($bestX, $bestY), Pixels: $maxBallPixels")
-                Log.d(TAG, "📱 Screen info: ${screenWidth}x${screenHeight}, landscape: $isLandscapeMode")
-                Log.d(TAG, "🖼️ Image dimensions: ${width}x${height}")
-                Log.d(TAG, "📊 Ball position relative to image: X=${"%.1f".format(bestX.toFloat()/width*100)}%, Y=${"%.1f".format(bestY.toFloat()/height*100)}%")
-                Log.d(TAG, "🔍 Search area used: ($searchStartX, $searchStartY) to ($searchEndX, $searchEndY)")
-                
-                // Calculate velocity and predict trajectory (relaxed validation for debugging)
-                if (ballHistory.size >= 2 && maxBallPixels >= 10) { // Relaxed requirements for debugging
-                    val velocity = calculateBallVelocity()
-                    if (velocity != null) {
-                        val (velX, velY) = velocity
-                        val speed = kotlin.math.sqrt(velX * velX + velY * velY)
-                        Log.d(TAG, "🚀 VELOCITY: ($velX, $velY), Speed: $speed px/s")
-                        
-                        // Show predictions even for slow movement (for debugging)
-                        if (speed > 10f) { // Much lower threshold for debugging
-                            val predictions = predictBallTrajectory(bestX, bestY, velX, velY)
-                            if (predictions.isNotEmpty()) {
+                if (bestBall != null) {
+                    val bestX = bestBall.x
+                    val bestY = bestBall.y
+                    val confidence = bestBall.confidence
+                    Log.d(TAG, "🎯 BALL DETECTED: Position ($bestX, $bestY), Confidence: ${"%.2f".format(confidence)}")
+                    Log.d(TAG, "📱 Screen info: ${screenWidth}x${screenHeight}, landscape: $isLandscapeMode")
+                    Log.d(TAG, "🖼️ Image dimensions: ${width}x${height}")
+                    Log.d(TAG, "📊 Ball position relative to image: X=${"%.1f".format(bestX/width*100)}%, Y=${"%.1f".format(bestY/height*100)}%")
+                    Log.d(TAG, "🔍 Search area used: ($searchStartX, $searchStartY) to ($searchEndX, $searchEndY)")
+                    
+                    // Add to ball tracking history
+                    val currentTime = System.currentTimeMillis()
+                    addBallToHistory(bestX, bestY, currentTime)
+                    
+                    // Calculate velocity and predict trajectory
+                    if (ballHistory.size >= 2) {
+                        val velocity = calculateBallVelocity()
+                        if (velocity != null) {
+                            val speed = sqrt(velocity.first * velocity.first + velocity.second * velocity.second)
+                            Log.d(TAG, "Ball velocity: (${velocity.first}, ${velocity.second}), speed: $speed px/s")
+                            
+                            // Show predictions if ball is moving fast enough
+                            if (speed > 30) { // Reasonable speed threshold
+                                val predictions = predictBallTrajectory(bestX, bestY, velocity.first, velocity.second)
+                                Log.d(TAG, "Generated ${predictions.size} prediction points")
+                                
+                                // Create Detection object for the ball
+                                val ballDetection = Detection(
+                                    cx = bestX / width,
+                                    cy = bestY / height,
+                                    r = bestBall.radius / width.coerceAtLeast(height),
+                                    conf = confidence
+                                )
+                                
                                 updatePredictionOverlay(predictions)
-                                Log.d(TAG, "📈 PREDICTION: ${predictions.size} points, first: (${predictions[0].x}, ${predictions[0].y}), last: (${predictions.last().x}, ${predictions.last().y})")
+                                updateNotificationWithBallDetection(ballDetection)
+                                
+                                return FrameResult(ballDetection, System.nanoTime())
+                            } else {
+                                Log.d(TAG, "Ball speed too low for prediction: $speed px/s")
                             }
-                        } else {
-                            // Still show a simple prediction for very slow movement
-                            val staticPredictions = listOf(
-                                PredictionPoint(bestX, bestY, 0f),
-                                PredictionPoint(bestX + velX, bestY + velY, 1f),
-                                PredictionPoint(bestX + velX * 2, bestY + velY * 2, 2f)
-                            )
-                            updatePredictionOverlay(staticPredictions)
-                            Log.d(TAG, "📍 STATIC PREDICTION: Ball moving slowly ($speed px/s)")
                         }
-                    } else {
-                        // Show current position even without velocity
-                        val currentPredictions = listOf(PredictionPoint(bestX, bestY, 0f))
-                        updatePredictionOverlay(currentPredictions)
-                        Log.d(TAG, "📍 CURRENT POSITION: No velocity data, showing current position")
                     }
-                } else {
-                    // Show current position even with insufficient data (for debugging)
-                    val currentPredictions = listOf(PredictionPoint(bestX, bestY, 0f))
-                    updatePredictionOverlay(currentPredictions)
-                    Log.d(TAG, "📍 INSUFFICIENT DATA: History: ${ballHistory.size}, Pixels: $maxBallPixels, showing current position")
-                }
-                
-                FrameResult(
-                    ball = Detection(
-                        cx = bestX / width, // Normalize to 0-1
+                    
+                    // Return current position even without prediction for debugging
+                    val ballDetection = Detection(
+                        cx = bestX / width,
                         cy = bestY / height,
-                        r = 0.05f, // Estimated radius
-                        conf = (maxBallPixels / 100f).coerceAtMost(1f)
-                    ),
-                    timestampNanos = System.nanoTime()
-                )
-            } else {
-                // Clear prediction overlay when no ball detected
-                updatePredictionOverlay(emptyList())
-                null
+                        r = bestBall.radius / width.coerceAtLeast(height),
+                        conf = confidence
+                    )
+                    
+                    updatePredictionOverlay(listOf(PredictionPoint(bestX, bestY, 0f)))
+                    updateNotificationWithBallDetection(ballDetection)
+                    
+                    return FrameResult(ballDetection, System.nanoTime())
+                }
             }
+            
+            null
         } catch (e: Exception) {
             Log.e(TAG, "Simple ball detection failed", e)
             null
         }
     }
     
+    // Data class for detected circular objects
+    data class CircleCandidate(
+        val x: Float,
+        val y: Float,
+        val radius: Float,
+        val confidence: Float,
+        val edgeStrength: Float
+    )
+    
+    // Detect circular objects using edge detection and shape analysis
+    private fun detectCircularObjects(bitmap: Bitmap, startX: Int, endX: Int, startY: Int, endY: Int): List<CircleCandidate> {
+        val circles = mutableListOf<CircleCandidate>()
+        
+        try {
+            // Expected ball size range (in pixels)
+            val minRadius = 15
+            val maxRadius = 80
+            val searchStep = 8 // Check every 8 pixels for performance
+            
+            Log.d(TAG, "🔍 Searching for circles in area ($startX,$startY) to ($endX,$endY)")
+            
+            // Grid search for circular patterns
+            for (centerY in startY until endY step searchStep) {
+                for (centerX in startX until endX step searchStep) {
+                    // Test different radii
+                    for (testRadius in minRadius..maxRadius step 5) {
+                        val circleScore = analyzeCircularPattern(bitmap, centerX, centerY, testRadius)
+                        
+                        if (circleScore > 0.3f) { // Minimum circularity threshold
+                            val edgeStrength = calculateEdgeStrength(bitmap, centerX, centerY, testRadius)
+                            val confidence = (circleScore * 0.7f + edgeStrength * 0.3f).coerceAtMost(1f)
+                            
+                            if (confidence > 0.4f) { // Minimum confidence threshold
+                                circles.add(CircleCandidate(
+                                    x = centerX.toFloat(),
+                                    y = centerY.toFloat(),
+                                    radius = testRadius.toFloat(),
+                                    confidence = confidence,
+                                    edgeStrength = edgeStrength
+                                ))
+                                
+                                Log.d(TAG, "🎯 Circle candidate: ($centerX,$centerY) r=$testRadius, confidence=${"%.2f".format(confidence)}")
+                            }
+                        }
+                    }
+                }
+            }
+            
+            Log.d(TAG, "🔍 Found ${circles.size} circle candidates")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in circle detection", e)
+        }
+        
+        return circles
+    }
+    
+    // Analyze circular pattern by checking pixel intensity changes around a circle
+    private fun analyzeCircularPattern(bitmap: Bitmap, centerX: Int, centerY: Int, radius: Int): Float {
+        return try {
+            val numSamples = 16 // Sample points around the circle
+            var edgeCount = 0
+            var totalSamples = 0
+            
+            for (i in 0 until numSamples) {
+                val angle = (i * 2 * Math.PI / numSamples)
+                val x1 = (centerX + (radius - 3) * cos(angle)).toInt()
+                val y1 = (centerY + (radius - 3) * sin(angle)).toInt()
+                val x2 = (centerX + (radius + 3) * cos(angle)).toInt()
+                val y2 = (centerY + (radius + 3) * sin(angle)).toInt()
+                
+                if (isValidPixel(bitmap, x1, y1) && isValidPixel(bitmap, x2, y2)) {
+                    val innerBrightness = getPixelBrightness(bitmap.getPixel(x1, y1))
+                    val outerBrightness = getPixelBrightness(bitmap.getPixel(x2, y2))
+                    
+                    // Look for brightness difference (edge)
+                    if (abs(innerBrightness - outerBrightness) > 30) {
+                        edgeCount++
+                    }
+                    totalSamples++
+                }
+            }
+            
+            if (totalSamples > 0) edgeCount.toFloat() / totalSamples else 0f
+            
+        } catch (e: Exception) {
+            0f
+        }
+    }
+    
+    // Calculate edge strength around a circular area
+    private fun calculateEdgeStrength(bitmap: Bitmap, centerX: Int, centerY: Int, radius: Int): Float {
+        return try {
+            var totalEdgeStrength = 0f
+            var sampleCount = 0
+            
+            // Sample points around the circle perimeter
+            for (angle in 0 until 360 step 15) {
+                val radians = Math.toRadians(angle.toDouble())
+                val x = (centerX + radius * cos(radians)).toInt()
+                val y = (centerY + radius * sin(radians)).toInt()
+                
+                if (isValidPixel(bitmap, x, y)) {
+                    val edgeStrength = calculateLocalEdgeStrength(bitmap, x, y)
+                    totalEdgeStrength += edgeStrength
+                    sampleCount++
+                }
+            }
+            
+            if (sampleCount > 0) totalEdgeStrength / sampleCount else 0f
+            
+        } catch (e: Exception) {
+            0f
+        }
+    }
+    
+    // Calculate local edge strength using gradient
+    private fun calculateLocalEdgeStrength(bitmap: Bitmap, x: Int, y: Int): Float {
+        return try {
+            if (!isValidPixel(bitmap, x-1, y) || !isValidPixel(bitmap, x+1, y) ||
+                !isValidPixel(bitmap, x, y-1) || !isValidPixel(bitmap, x, y+1)) {
+                return 0f
+            }
+            
+            val centerBrightness = getPixelBrightness(bitmap.getPixel(x, y))
+            val leftBrightness = getPixelBrightness(bitmap.getPixel(x-1, y))
+            val rightBrightness = getPixelBrightness(bitmap.getPixel(x+1, y))
+            val topBrightness = getPixelBrightness(bitmap.getPixel(x, y-1))
+            val bottomBrightness = getPixelBrightness(bitmap.getPixel(x, y+1))
+            
+            val gradientX = abs(rightBrightness - leftBrightness)
+            val gradientY = abs(bottomBrightness - topBrightness)
+            
+            sqrt(gradientX * gradientX + gradientY * gradientY) / 255f
+            
+        } catch (e: Exception) {
+            0f
+        }
+    }
+    
+    // Find the best ball candidate from detected circles
+    private fun findBestBallCandidate(circles: List<CircleCandidate>, imageWidth: Int, imageHeight: Int): CircleCandidate? {
+        if (circles.isEmpty()) return null
+        
+        // Score circles based on multiple factors
+        val scoredCircles = circles.map { circle ->
+            var score = circle.confidence
+            
+            // Prefer circles in the center area of the search region
+            val centerX = imageWidth / 2f
+            val centerY = imageHeight / 2f
+            val distanceFromCenter = sqrt((circle.x - centerX) * (circle.x - centerX) + (circle.y - centerY) * (circle.y - centerY))
+            val maxDistance = sqrt(centerX * centerX + centerY * centerY)
+            val centerBonus = 1f - (distanceFromCenter / maxDistance) * 0.3f // Up to 30% bonus for center position
+            score *= centerBonus
+            
+            // Prefer medium-sized circles (typical ball size)
+            val idealRadius = 35f
+            val radiusDiff = abs(circle.radius - idealRadius)
+            val radiusBonus = 1f - (radiusDiff / idealRadius) * 0.2f // Up to 20% penalty for size difference
+            score *= radiusBonus.coerceAtLeast(0.5f)
+            
+            // Boost score for high edge strength
+            score *= (1f + circle.edgeStrength * 0.5f)
+            
+            Pair(circle, score)
+        }
+        
+        // Return the highest scoring circle
+        val bestCircle = scoredCircles.maxByOrNull { it.second }
+        Log.d(TAG, "🎯 Best circle: (${bestCircle?.first?.x}, ${bestCircle?.first?.y}) score=${"%.2f".format(bestCircle?.second ?: 0f)}")
+        
+        return bestCircle?.first
+    }
+    
+    // Helper function to check if pixel coordinates are valid
+    private fun isValidPixel(bitmap: Bitmap, x: Int, y: Int): Boolean {
+        return x >= 0 && x < bitmap.width && y >= 0 && y < bitmap.height
+    }
+    
+    // Helper function to get pixel brightness
+    private fun getPixelBrightness(pixel: Int): Float {
+        val r = (pixel shr 16) and 0xFF
+        val g = (pixel shr 8) and 0xFF
+        val b = pixel and 0xFF
+        return (r * 0.299f + g * 0.587f + b * 0.114f) // Standard luminance formula
+    }
+
     private fun countBallPixelsInRegion(bitmap: Bitmap, startX: Int, startY: Int, size: Int): Int {
         return try {
             var count = 0
