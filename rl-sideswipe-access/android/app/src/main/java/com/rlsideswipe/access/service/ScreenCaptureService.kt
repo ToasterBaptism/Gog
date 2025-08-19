@@ -469,6 +469,15 @@ class ScreenCaptureService : Service() {
             // 🎯 PRIMARY: Template matching for specific ball detection
             val templateMatches = detectBallUsingTemplate(bitmap, searchStartX, searchEndX, searchStartY, searchEndY)
             
+            // 🎯 IMMEDIATE OVERLAY UPDATE: Show template matches right away!
+            if (templateMatches.isNotEmpty()) {
+                Log.d(TAG, "🎯 IMMEDIATE OVERLAY UPDATE: ${templateMatches.size} template matches found!")
+                val overlayPoints = templateMatches.map { match ->
+                    PredictionPoint(match.x, match.y, 0f)
+                }
+                updatePredictionOverlay(overlayPoints)
+            }
+            
             // 🔍 FALLBACK: Shape analysis if template matching fails
             val finalCircles = if (templateMatches.isNotEmpty()) {
                 Log.d(TAG, "🎯 Using template matching results: ${templateMatches.size} matches")

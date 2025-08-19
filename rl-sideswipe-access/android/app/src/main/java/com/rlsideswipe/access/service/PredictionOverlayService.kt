@@ -18,6 +18,10 @@ class PredictionOverlayService : Service() {
         private var instance: PredictionOverlayService? = null
         
         fun updatePredictions(predictions: List<PredictionPoint>) {
+            Log.d(TAG, "🎯 OVERLAY: Received ${predictions.size} predictions to display")
+            predictions.forEachIndexed { index, pred ->
+                Log.d(TAG, "🎯 OVERLAY: Point $index: (${pred.x}, ${pred.y})")
+            }
             instance?.updatePrediction(predictions)
         }
         
