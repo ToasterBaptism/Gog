@@ -45,6 +45,10 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
     NativeControl.openAccessibilitySettings();
   };
 
+  const handleOverlaySettings = () => {
+    NativeControl.openOverlaySettings();
+  };
+
   const handleRequestPermissions = async () => {
     try {
       setLoading(true);
@@ -175,7 +179,7 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
                 </Text>
                 <TouchableOpacity
                   style={[styles.button, isOverlayEnabled && styles.buttonDisabled]}
-                  onPress={handleRequestPermissions}
+                  onPress={handleOverlaySettings}
                   disabled={isOverlayEnabled}>
                   <Text style={styles.buttonText}>
                     {isOverlayEnabled ? 'Granted' : 'Grant Overlay'}

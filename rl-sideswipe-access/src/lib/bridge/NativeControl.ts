@@ -7,9 +7,11 @@ interface PermissionStatus {
 interface NativeControlInterface {
   isServiceEnabled(): Promise<boolean>;
   openAccessibilitySettings(): void;
+  openOverlaySettings(): void;
   checkPermissions(): Promise<boolean>;
   requestPermissions(): Promise<void>;
   getDetailedPermissionStatus(): Promise<PermissionStatus>;
+  checkAllRequiredPermissions(): Promise<any>;
   hasMediaProjectionPermission(): Promise<boolean>;
   start(): Promise<void>;
   stop(): Promise<void>;

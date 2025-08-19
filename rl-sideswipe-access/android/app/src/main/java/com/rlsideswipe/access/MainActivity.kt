@@ -56,6 +56,9 @@ class MainActivity : ReactActivity() {
         Log.d("MainActivity", "Requesting MediaProjection permission...")
         
         try {
+            // Clear any existing pending callback first
+            pendingMediaProjectionResult = null
+            
             val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as? MediaProjectionManager
             if (mediaProjectionManager == null) {
                 Log.e("MainActivity", "MediaProjectionManager is null")
@@ -65,29 +68,9 @@ class MainActivity : ReactActivity() {
             
             val captureIntent = mediaProjectionManager.createScreenCaptureIntent()
             Log.d("MainActivity", "Created screen capture intent: $captureIntent")
-            Log.d("MainActivity", "Intent action: ${captureIntent.action}")
-            Log.d("MainActivity", "Intent component: ${captureIntent.component}")
             
-            // Add timeout to detect if dialog never appears
-            val timeoutHandler = android.os.Handler(android.os.Looper.getMainLooper())
-            val timeoutRunnable = Runnable {
-                if (pendingMediaProjectionResult != null) {
-                    Log.w("MainActivity", "MediaProjection dialog timeout - no response after 30 seconds")
-                    val pendingCallback = pendingMediaProjectionResult
-                    pendingMediaProjectionResult = null
-                    pendingCallback?.invoke(null)
-                }
-            }
-            
-            // Set up the callback with timeout cancellation
-            pendingMediaProjectionResult = { result ->
-                Log.d("MainActivity", "MediaProjection callback invoked with result: $result")
-                timeoutHandler.removeCallbacks(timeoutRunnable)
-                callback(result)
-            }
-            
-            // Start timeout after setting up callback
-            timeoutHandler.postDelayed(timeoutRunnable, 30000) // 30 second timeout
+            // Set the callback BEFORE launching the intent
+            pendingMediaProjectionResult = callback
             
             Log.d("MainActivity", "Launching MediaProjection intent...")
             mediaProjectionLauncher.launch(captureIntent)

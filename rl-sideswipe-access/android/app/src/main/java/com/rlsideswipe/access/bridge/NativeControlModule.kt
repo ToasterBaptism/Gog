@@ -83,6 +83,21 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
     }
 
     @ReactMethod
+    fun openOverlaySettings() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                    data = android.net.Uri.parse("package:${reactApplicationContext.packageName}")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                reactApplicationContext.startActivity(intent)
+            }
+        } catch (e: Exception) {
+            Log.e("NativeControl", "Failed to open overlay settings", e)
+        }
+    }
+
+    @ReactMethod
     fun checkPermissions(promise: Promise) {
         try {
             val missingPermissions = mutableListOf<String>()
@@ -325,67 +340,77 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
 
     @ReactMethod
     fun start(promise: Promise) {
+        Log.d("NativeControl", "=== START METHOD CALLED ===")
         try {
             Log.d("NativeControl", "Starting screen capture...")
             val activity = currentActivity
             Log.d("NativeControl", "Current activity: $activity")
+            Log.d("NativeControl", "Activity class: ${activity?.javaClass?.name}")
             
-            if (activity is com.rlsideswipe.access.MainActivity) {
-                Log.d("NativeControl", "MainActivity found, requesting MediaProjection permission...")
-                
-                // Check if MediaProjectionManager is available
-                val mediaProjectionManager = reactApplicationContext.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as? MediaProjectionManager
-                if (mediaProjectionManager == null) {
-                    Log.e("NativeControl", "MediaProjectionManager not available")
-                    promise.reject("ERROR", "MediaProjection not supported on this device")
-                    return
-                }
-                
-                Log.d("NativeControl", "MediaProjectionManager available, creating screen capture intent...")
-                
-                activity.requestMediaProjection { captureIntent ->
-                    Log.d("NativeControl", "MediaProjection callback invoked with intent: $captureIntent")
-                    try {
-                        if (captureIntent != null) {
-                            Log.d("NativeControl", "MediaProjection permission granted, starting service...")
-                            Log.d("NativeControl", "Capture intent extras: ${captureIntent.extras}")
-                            
-                            val serviceIntent = Intent(reactApplicationContext, ScreenCaptureService::class.java).apply {
-                                putExtra("captureIntent", captureIntent)
-                            }
-
-                            try {
-                                val result = reactApplicationContext.startForegroundService(serviceIntent)
-                                Log.d("NativeControl", "Service start result: $result")
-                                
-                                // Give the service a moment to start
-                                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                                    val isRunning = isScreenCaptureServiceRunning()
-                                    Log.d("NativeControl", "Service running after start: $isRunning")
-                                }, 1000)
-                                
-                                promise.resolve(null)
-                            } catch (e: Exception) {
-                                Log.e("NativeControl", "Failed to start foreground service", e)
-                                promise.reject("ERROR", "Failed to start service: ${e.message}", e)
-                            }
-                        } else {
-                            Log.e("NativeControl", "MediaProjection permission denied by user")
-                            promise.reject("ERROR", "Screen capture permission denied. Please grant permission to continue.")
-                        }
-                    } catch (e: Exception) {
-                        Log.e("NativeControl", "Error in MediaProjection callback", e)
-                        promise.reject("ERROR", "Failed to start service: ${e.message}", e)
-                    }
-                }
-            } else {
-                Log.e("NativeControl", "Invalid activity type: $activity (expected MainActivity)")
-                Log.e("NativeControl", "Activity class: ${activity?.javaClass?.name}")
-                promise.reject("ERROR", "Invalid activity context. Please ensure the app is in the foreground.")
+            if (activity == null) {
+                Log.e("NativeControl", "No current activity available")
+                promise.reject("ERROR", "No activity available. Please ensure the app is in the foreground.")
+                return
             }
-        } catch (e: Exception) {
-            Log.e("NativeControl", "Failed to start screen capture", e)
-            promise.reject("ERROR", "Failed to start screen capture: ${e.message}", e)
+            
+            if (activity !is com.rlsideswipe.access.MainActivity) {
+                Log.e("NativeControl", "Invalid activity type: $activity (expected MainActivity)")
+                promise.reject("ERROR", "Invalid activity context. Please restart the app.")
+                return
+            }
+            
+            Log.d("NativeControl", "MainActivity found, checking MediaProjectionManager...")
+            
+            // Check if MediaProjectionManager is available
+            val mediaProjectionManager = reactApplicationContext.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as? MediaProjectionManager
+            if (mediaProjectionManager == null) {
+                Log.e("NativeControl", "MediaProjectionManager not available")
+                promise.reject("ERROR", "MediaProjection not supported on this device")
+                return
+            }
+            
+            Log.d("NativeControl", "MediaProjectionManager available, requesting permission...")
+            
+            // Wrap the callback in additional error handling
+            activity.requestMediaProjection { captureIntent ->
+                Log.d("NativeControl", "=== MEDIA PROJECTION CALLBACK ===")
+                Log.d("NativeControl", "MediaProjection callback invoked with intent: $captureIntent")
+                
+                try {
+                    if (captureIntent != null) {
+                        Log.d("NativeControl", "MediaProjection permission granted, starting service...")
+                        
+                        val serviceIntent = Intent(reactApplicationContext, ScreenCaptureService::class.java).apply {
+                            putExtra("captureIntent", captureIntent)
+                        }
+
+                        try {
+                            Log.d("NativeControl", "Starting foreground service...")
+                            val result = reactApplicationContext.startForegroundService(serviceIntent)
+                            Log.d("NativeControl", "Service start result: $result")
+                            
+                            promise.resolve(null)
+                            Log.d("NativeControl", "Promise resolved successfully")
+                            
+                        } catch (serviceException: Exception) {
+                            Log.e("NativeControl", "Failed to start foreground service", serviceException)
+                            promise.reject("SERVICE_ERROR", "Failed to start service: ${serviceException.message}", serviceException)
+                        }
+                    } else {
+                        Log.e("NativeControl", "MediaProjection permission denied by user")
+                        promise.reject("PERMISSION_DENIED", "Screen capture permission denied. Please grant permission to continue.")
+                    }
+                } catch (callbackException: Exception) {
+                    Log.e("NativeControl", "Error in MediaProjection callback", callbackException)
+                    promise.reject("CALLBACK_ERROR", "Failed to process permission result: ${callbackException.message}", callbackException)
+                }
+            }
+            
+            Log.d("NativeControl", "MediaProjection request initiated successfully")
+            
+        } catch (outerException: Exception) {
+            Log.e("NativeControl", "Outer exception in start method", outerException)
+            promise.reject("GENERAL_ERROR", "Failed to start: ${outerException.message}", outerException)
         }
     }
 
@@ -525,6 +550,62 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
         }
     }
     
+    @ReactMethod
+    fun checkAllRequiredPermissions(promise: Promise) {
+        try {
+            val results = mutableMapOf<String, Any>()
+            
+            // Check accessibility service
+            val accessibilityEnabled = isAccessibilityServiceEnabled()
+            results["accessibilityService"] = accessibilityEnabled
+            
+            // Check overlay permission
+            val overlayEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Settings.canDrawOverlays(reactApplicationContext)
+            } else {
+                true
+            }
+            results["overlayPermission"] = overlayEnabled
+            
+            // Check runtime permissions
+            val runtimePermissions = mutableListOf<String>()
+            runtimePermissions.add(Manifest.permission.RECORD_AUDIO)
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                runtimePermissions.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            
+            val missingRuntimePermissions = mutableListOf<String>()
+            for (permission in runtimePermissions) {
+                if (ContextCompat.checkSelfPermission(reactApplicationContext, permission) 
+                    != PackageManager.PERMISSION_GRANTED) {
+                    missingRuntimePermissions.add(permission)
+                }
+            }
+            results["missingRuntimePermissions"] = missingRuntimePermissions
+            
+            // Check battery optimization
+            val batteryOptimized = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val powerManager = reactApplicationContext.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+                powerManager.isIgnoringBatteryOptimizations(reactApplicationContext.packageName)
+            } else {
+                true
+            }
+            results["batteryOptimizationIgnored"] = batteryOptimized
+            
+            // Overall readiness
+            val allReady = accessibilityEnabled && overlayEnabled && missingRuntimePermissions.isEmpty() && batteryOptimized
+            results["allPermissionsReady"] = allReady
+            
+            Log.d("NativeControl", "Permission check results: $results")
+            promise.resolve(Arguments.makeNativeMap(results as Map<String, Any>))
+            
+        } catch (e: Exception) {
+            Log.e("NativeControl", "Failed to check all permissions", e)
+            promise.reject("ERROR", "Failed to check permissions", e)
+        }
+    }
+
     @ReactMethod
     fun debugPermissionSystem(promise: Promise) {
         try {

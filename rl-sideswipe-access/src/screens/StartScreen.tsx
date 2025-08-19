@@ -75,10 +75,49 @@ const StartScreen: React.FC = () => {
     console.log('handleStartStop called, isActive:', isActive);
     console.log('serviceEnabled:', serviceEnabled, 'permissionsGranted:', permissionsGranted);
     
-    if (!serviceEnabled || !permissionsGranted) {
-      console.log('Permissions not ready, showing overlay');
-      setShowPermissionOverlay(true);
-      return;
+    if (!isActive) {
+      // Before starting, do a comprehensive permission check
+      try {
+        console.log('Checking all required permissions...');
+        const permissionCheck = await NativeControl.checkAllRequiredPermissions();
+        console.log('Permission check results:', permissionCheck);
+        
+        if (!permissionCheck.allPermissionsReady) {
+          console.log('Not all permissions are ready, showing overlay');
+          let missingItems = [];
+          
+          if (!permissionCheck.accessibilityService) {
+            missingItems.push('Accessibility Service');
+          }
+          if (!permissionCheck.overlayPermission) {
+            missingItems.push('Overlay Permission');
+          }
+          if (permissionCheck.missingRuntimePermissions && permissionCheck.missingRuntimePermissions.length > 0) {
+            missingItems.push('Runtime Permissions');
+          }
+          if (!permissionCheck.batteryOptimizationIgnored) {
+            missingItems.push('Battery Optimization');
+          }
+          
+          Alert.alert(
+            'Setup Required',
+            `Please complete the following setup steps:\n\n• ${missingItems.join('\n• ')}\n\nTap "Setup" to configure these permissions.`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Setup', onPress: () => setShowPermissionOverlay(true) }
+            ]
+          );
+          return;
+        }
+      } catch (e) {
+        console.warn('Failed to check permissions:', e);
+        // Continue with the old check as fallback
+        if (!serviceEnabled || !permissionsGranted) {
+          console.log('Permissions not ready (fallback check), showing overlay');
+          setShowPermissionOverlay(true);
+          return;
+        }
+      }
     }
 
     try {
