@@ -37,6 +37,8 @@ import kotlin.math.sqrt
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.abs
+import android.graphics.BitmapFactory
+import androidx.core.content.ContextCompat
 
 // Helper data class for search area bounds
 data class Tuple4(val first: Int, val second: Int, val third: Int, val fourth: Int)
@@ -58,6 +60,9 @@ class ScreenCaptureService : Service() {
     private var imageReader: ImageReader? = null
     private var inferenceEngine: InferenceEngine? = null
     private var trajectoryPredictor: TrajectoryPredictor? = null
+    
+    // Template matching for ball detection
+    private var ballTemplate: Bitmap? = null
     
     private var backgroundThread: HandlerThread? = null
     private var backgroundHandler: Handler? = null
@@ -83,6 +88,7 @@ class ScreenCaptureService : Service() {
         super.onCreate()
         createNotificationChannel()
         setupBackgroundThread()
+        loadBallTemplate()
         lastPerformanceLog = System.currentTimeMillis()
         startPredictionOverlay()
         Log.d(TAG, "ScreenCaptureService created")
@@ -460,14 +466,20 @@ class ScreenCaptureService : Service() {
             
             Log.d(TAG, "🔍 Search area: X($searchStartX-$searchEndX), Y($searchStartY-$searchEndY) [${if (isLandscapeMode) "LANDSCAPE" else "PORTRAIT"}]")
             
-            // Detect circular objects (balls) using shape analysis
-            val detectedCircles = detectCircularObjects(bitmap, searchStartX, searchEndX, searchStartY, searchEndY)
+            // 🎯 PRIMARY: Template matching for specific ball detection
+            val templateMatches = detectBallUsingTemplate(bitmap, searchStartX, searchEndX, searchStartY, searchEndY)
             
-            // 🔍 DISABLED FALLBACK: Too many false positives, focus on main detection
-            val finalCircles = detectedCircles
-            
-            if (detectedCircles.isEmpty()) {
-                Log.d(TAG, "🔄 No circles found with current thresholds")
+            // 🔍 FALLBACK: Shape analysis if template matching fails
+            val finalCircles = if (templateMatches.isNotEmpty()) {
+                Log.d(TAG, "🎯 Using template matching results: ${templateMatches.size} matches")
+                templateMatches
+            } else {
+                Log.d(TAG, "🔄 Template matching failed, trying shape analysis...")
+                val shapeMatches = detectCircularObjects(bitmap, searchStartX, searchEndX, searchStartY, searchEndY)
+                if (shapeMatches.isEmpty()) {
+                    Log.d(TAG, "🔄 No circles found with any method")
+                }
+                shapeMatches
             }
             
             if (finalCircles.isNotEmpty()) {
@@ -559,6 +571,128 @@ class ScreenCaptureService : Service() {
         val confidence: Float,
         val edgeStrength: Float
     )
+    
+    // Load ball template for template matching
+    private fun loadBallTemplate() {
+        try {
+            // For now, create a simple template - you'll replace this with actual ball image
+            ballTemplate = createSimpleBallTemplate()
+            Log.d(TAG, "🎯 Ball template loaded successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load ball template", e)
+        }
+    }
+    
+    // Create a simple ball template (placeholder - replace with actual ball image)
+    private fun createSimpleBallTemplate(): Bitmap {
+        val size = 60 // Template size
+        val template = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val centerX = size / 2
+        val centerY = size / 2
+        val radius = size / 3
+        
+        // Create a simple gray circle template
+        for (y in 0 until size) {
+            for (x in 0 until size) {
+                val dx = x - centerX
+                val dy = y - centerY
+                val distance = sqrt((dx * dx + dy * dy).toFloat())
+                
+                if (distance <= radius) {
+                    // Gray metallic ball color
+                    val intensity = (200 - (distance / radius * 50)).toInt().coerceIn(150, 200)
+                    val color = (0xFF shl 24) or (intensity shl 16) or (intensity shl 8) or intensity
+                    template.setPixel(x, y, color)
+                } else {
+                    template.setPixel(x, y, 0x00000000) // Transparent
+                }
+            }
+        }
+        
+        return template
+    }
+    
+    // Template matching for ball detection
+    private fun detectBallUsingTemplate(bitmap: Bitmap, startX: Int, endX: Int, startY: Int, endY: Int): List<CircleCandidate> {
+        val candidates = mutableListOf<CircleCandidate>()
+        val template = ballTemplate ?: return candidates
+        
+        try {
+            val templateWidth = template.width
+            val templateHeight = template.height
+            val threshold = 0.7f // Template matching threshold
+            
+            Log.d(TAG, "🎯 Template matching: ${templateWidth}x${templateHeight} template")
+            
+            // Search for template matches
+            val searchStep = 8 // Faster search
+            for (y in startY until (endY - templateHeight) step searchStep) {
+                for (x in startX until (endX - templateWidth) step searchStep) {
+                    val similarity = calculateTemplateSimilarity(bitmap, template, x, y)
+                    
+                    if (similarity > threshold) {
+                        val centerX = x + templateWidth / 2
+                        val centerY = y + templateHeight / 2
+                        val radius = templateWidth / 2
+                        
+                        candidates.add(CircleCandidate(
+                            x = centerX.toFloat(),
+                            y = centerY.toFloat(),
+                            radius = radius.toFloat(),
+                            confidence = similarity,
+                            edgeStrength = 0.8f // High edge strength for template matches
+                        ))
+                        
+                        Log.d(TAG, "🎯 Template match: ($centerX,$centerY) similarity=${"%.3f".format(similarity)}")
+                    }
+                }
+            }
+            
+            Log.d(TAG, "🎯 Template matching found ${candidates.size} candidates")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in template matching", e)
+        }
+        
+        return candidates
+    }
+    
+    // Calculate similarity between template and image region
+    private fun calculateTemplateSimilarity(bitmap: Bitmap, template: Bitmap, startX: Int, startY: Int): Float {
+        val templateWidth = template.width
+        val templateHeight = template.height
+        var totalDifference = 0f
+        var pixelCount = 0
+        
+        for (ty in 0 until templateHeight) {
+            for (tx in 0 until templateWidth) {
+                val bitmapX = startX + tx
+                val bitmapY = startY + ty
+                
+                if (bitmapX < bitmap.width && bitmapY < bitmap.height) {
+                    val templatePixel = template.getPixel(tx, ty)
+                    val bitmapPixel = bitmap.getPixel(bitmapX, bitmapY)
+                    
+                    // Skip transparent template pixels
+                    if ((templatePixel ushr 24) > 0) {
+                        val templateGray = getPixelBrightness(templatePixel)
+                        val bitmapGray = getPixelBrightness(bitmapPixel)
+                        
+                        val difference = abs(templateGray - bitmapGray)
+                        totalDifference += difference
+                        pixelCount++
+                    }
+                }
+            }
+        }
+        
+        if (pixelCount == 0) return 0f
+        
+        val avgDifference = totalDifference / pixelCount
+        val similarity = 1f - (avgDifference / 255f) // Convert to similarity (0-1)
+        
+        return similarity.coerceIn(0f, 1f)
+    }
     
     // Detect circular objects using edge detection and shape analysis
     private fun detectCircularObjects(bitmap: Bitmap, startX: Int, endX: Int, startY: Int, endY: Int): List<CircleCandidate> {
