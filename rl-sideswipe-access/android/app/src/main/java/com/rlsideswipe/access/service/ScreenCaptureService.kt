@@ -418,13 +418,32 @@ class ScreenCaptureService : Service() {
                 val currentTime = System.currentTimeMillis()
                 addBallToHistory(bestX, bestY, currentTime)
                 
-                // Calculate velocity and predict trajectory
-                calculateBallVelocity()?.let { (velX, velY) ->
-                    val predictions = predictBallTrajectory(bestX, bestY, velX, velY)
-                    if (predictions.isNotEmpty()) {
-                        updatePredictionOverlay(predictions)
-                        Log.d(TAG, "Ball trajectory predicted: ${predictions.size} points, velocity: ($velX, $velY)")
+                // Calculate velocity and predict trajectory (only if we have reliable detection)
+                if (ballHistory.size >= 3 && maxBallPixels >= 20) { // Need at least 3 positions and decent detection
+                    val velocity = calculateBallVelocity()
+                    if (velocity != null) {
+                        val (velX, velY) = velocity
+                        val speed = kotlin.math.sqrt(velX * velX + velY * velY)
+                        // Only show predictions if ball is moving fast enough (avoid noise)
+                        if (speed > 50f) { // Minimum 50 pixels/second
+                            val predictions = predictBallTrajectory(bestX, bestY, velX, velY)
+                            if (predictions.isNotEmpty()) {
+                                updatePredictionOverlay(predictions)
+                                Log.d(TAG, "Ball trajectory predicted: ${predictions.size} points, velocity: ($velX, $velY), speed: $speed")
+                            }
+                        } else {
+                            // Clear overlay if ball is moving too slowly (likely detection noise)
+                            updatePredictionOverlay(emptyList())
+                            Log.d(TAG, "Ball moving too slowly ($speed px/s), clearing prediction")
+                        }
+                    } else {
+                        updatePredictionOverlay(emptyList())
+                        Log.d(TAG, "No velocity data available")
                     }
+                } else {
+                    // Clear overlay if we don't have enough reliable detection data
+                    updatePredictionOverlay(emptyList())
+                    Log.d(TAG, "Insufficient ball detection data (history: ${ballHistory.size}, pixels: $maxBallPixels)")
                 }
                 
                 FrameResult(
@@ -475,18 +494,26 @@ class ScreenCaptureService : Service() {
         // Method 1: Orange/Red balls (classic Rocket League)
         val isOrangeRed = red > 150 && green > 50 && green < 200 && blue < 100
         
-        // Method 2: Gray/Silver balls (like in your screenshot)
-        val isGraySilver = red > 120 && green > 120 && blue > 120 && 
-                          red < 200 && green < 200 && blue < 200 &&
-                          Math.abs(red - green) < 30 && Math.abs(red - blue) < 30 && Math.abs(green - blue) < 30
+        // Method 2: Gray/Silver balls (enhanced for complex lighting)
+        val brightness = (red + green + blue) / 3
+        val colorVariance = Math.max(Math.max(Math.abs(red - green), Math.abs(green - blue)), Math.abs(red - blue))
+        val isGraySilver = brightness in 80..220 && 
+                          colorVariance < 50 && // More flexible color variance
+                          red in 70..200 && green in 70..200 && blue in 70..200 // Broader range
         
-        // Method 3: White/Bright balls
-        val isWhiteBright = red > 200 && green > 200 && blue > 200
+        // Method 3: White/Bright balls (enhanced)
+        val isWhiteBright = brightness > 180 && 
+                           colorVariance < 60 && // More flexible for bright surfaces
+                           (red > 150 || green > 150 || blue > 150) // At least one channel bright
         
         // Method 4: Yellow/Golden balls
         val isYellowGold = red > 180 && green > 150 && blue < 120 && red > green && green > blue
         
-        return isOrangeRed || isGraySilver || isWhiteBright || isYellowGold
+        // Method 5: Dark metallic balls (for shadowed/darker areas)
+        val isDarkMetallic = brightness in 50..120 && colorVariance < 30 &&
+                            red in 40..130 && green in 40..130 && blue in 40..130
+
+        return isOrangeRed || isGraySilver || isWhiteBright || isYellowGold || isDarkMetallic
     }
     
     private var lastBallDetectionTime = 0L
@@ -644,9 +671,14 @@ class ScreenCaptureService : Service() {
             if (currentTime - lastBallDetectionTime > 2000) {
                 lastBallDetectionTime = currentTime
                 
+                val velocityInfo = calculateBallVelocity()?.let { (vx, vy) ->
+                    val speed = kotlin.math.sqrt(vx * vx + vy * vy)
+                    " | Speed: ${speed.toInt()}px/s"
+                } ?: ""
+                
                 val notification = NotificationCompat.Builder(this, CHANNEL_ID)
                     .setContentTitle("RL Sideswipe Access - BALL DETECTED!")
-                    .setContentText("🎯 Ball found at (${(it.cx * 100).toInt()}%, ${(it.cy * 100).toInt()}%) - Confidence: ${(it.conf * 100).toInt()}% - Count: $ballDetectionCount")
+                    .setContentText("🎯 Ball at (${(it.cx * 100).toInt()}%, ${(it.cy * 100).toInt()}%) | Conf: ${(it.conf * 100).toInt()}% | History: ${ballHistory.size}$velocityInfo")
                     .setSmallIcon(R.drawable.ic_notification)
                     .setOngoing(true)
                     .setPriority(NotificationCompat.PRIORITY_LOW)

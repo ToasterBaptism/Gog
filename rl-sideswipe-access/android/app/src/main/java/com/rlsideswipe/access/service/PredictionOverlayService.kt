@@ -120,9 +120,9 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
         post { invalidate() } // Redraw on UI thread
     }
     
-    override fun onDraw(canvas: Canvas?) {
+    public override fun onDraw(canvas: Canvas?) {
         super.onDraw(canvas)
-        canvas ?: return
+        if (canvas == null) return
         
         if (predictions.isEmpty()) return
         
