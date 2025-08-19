@@ -34,6 +34,9 @@ import com.rlsideswipe.access.ai.TrajectoryPredictor
 import com.rlsideswipe.access.ai.KalmanTrajectoryPredictor
 import com.rlsideswipe.access.util.BitmapUtils
 
+// Helper data class for search area bounds
+data class Tuple4(val first: Int, val second: Int, val third: Int, val fourth: Int)
+
 class ScreenCaptureService : Service() {
     
     companion object {
@@ -58,6 +61,11 @@ class ScreenCaptureService : Service() {
     
     private var lastFrameTime = 0L
     private var frameCount = 0
+    
+    // Screen orientation and dimensions
+    private var screenWidth = 0
+    private var screenHeight = 0
+    private var isLandscapeMode = false
     private var droppedFrames = 0
     private var totalInferenceTime = 0L
     private var lastPerformanceLog = 0L
@@ -173,8 +181,15 @@ class ScreenCaptureService : Service() {
             val width = displayMetrics.widthPixels
             val height = displayMetrics.heightPixels
             val density = displayMetrics.densityDpi
+            val rotation = windowManager.defaultDisplay.rotation
             
-            Log.d(TAG, "Display: ${width}x${height}, density: $density")
+            // Store screen info for coordinate transformations
+            screenWidth = width
+            screenHeight = height
+            isLandscapeMode = width > height
+            
+            Log.d(TAG, "🖥️ Display: ${width}x${height}, density: $density, rotation: $rotation")
+            Log.d(TAG, "📱 Orientation: ${if (isLandscapeMode) "LANDSCAPE" else "PORTRAIT"}")
             
             // Use RGBA_8888 for stability (avoid complex YUV conversion crashes)
             val format = PixelFormat.RGBA_8888
@@ -398,16 +413,31 @@ class ScreenCaptureService : Service() {
             var bestY = -1f
             var maxBallPixels = 0
             
-            // Focus on upper 2/3 of screen where ball typically appears (avoid UI elements at bottom)
-            val searchHeight = (height * 0.75).toInt() // Only search upper 75% of screen
-            val searchStartY = (height * 0.1).toInt() // Skip top 10% (UI elements)
+            // Adjust search area based on orientation
+            val (searchStartX, searchEndX, searchStartY, searchEndY) = if (isLandscapeMode) {
+                // In landscape: avoid UI elements on left/right sides, focus on center area
+                val searchStartX = (width * 0.1).toInt() // Skip left 10% (UI elements)
+                val searchEndX = (width * 0.9).toInt() // Skip right 10% (UI elements)
+                val searchStartY = (height * 0.1).toInt() // Skip top 10%
+                val searchEndY = (height * 0.9).toInt() // Skip bottom 10%
+                Tuple4(searchStartX, searchEndX, searchStartY, searchEndY)
+            } else {
+                // In portrait: focus on upper area (original logic)
+                val searchStartX = 0
+                val searchEndX = width
+                val searchStartY = (height * 0.1).toInt() // Skip top 10% (UI elements)
+                val searchEndY = (height * 0.75).toInt() // Only search upper 75% of screen
+                Tuple4(searchStartX, searchEndX, searchStartY, searchEndY)
+            }
+            
+            Log.d(TAG, "🔍 Search area: X($searchStartX-$searchEndX), Y($searchStartY-$searchEndY) [${if (isLandscapeMode) "LANDSCAPE" else "PORTRAIT"}]")
             
             // Grid search for ball-colored regions in focused area
             val gridSize = 30 // Smaller grid for better precision
             var detectionRegions = mutableListOf<String>()
             
-            for (y in searchStartY until searchHeight step gridSize) {
-                for (x in 0 until width step gridSize) {
+            for (y in searchStartY until searchEndY step gridSize) {
+                for (x in searchStartX until searchEndX step gridSize) {
                     val ballPixelCount = countBallPixelsInRegion(bitmap, x, y, gridSize)
                     if (ballPixelCount > 5) { // Log any significant detection
                         detectionRegions.add("($x,$y):$ballPixelCount")
@@ -659,7 +689,11 @@ class ScreenCaptureService : Service() {
         try {
             predictionOverlayService = Intent(this, PredictionOverlayService::class.java)
             startService(predictionOverlayService)
-            Log.d(TAG, "Prediction overlay service started")
+            
+            // Pass screen info to overlay service for coordinate transformation
+            PredictionOverlayService.updateScreenInfo(screenWidth, screenHeight, isLandscapeMode)
+            
+            Log.d(TAG, "Prediction overlay service started with screen info: ${screenWidth}x${screenHeight}, landscape: $isLandscapeMode")
         } catch (e: Exception) {
             Log.e(TAG, "Error starting prediction overlay", e)
         }

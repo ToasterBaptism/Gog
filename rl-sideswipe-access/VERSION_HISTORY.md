@@ -1,6 +1,33 @@
 # RL Sideswipe Access - Version History
 
-## v2.6-DEBUG-VISUAL-INDICATOR (Current)
+## v2.7-LANDSCAPE-COORDINATE-FIX (Current)
+**Release Date:** 2025-08-19  
+**APK:** `app-release-v2.7-LANDSCAPE-COORDINATE-FIX.apk`  
+**Size:** 49MB  
+
+### 🔧 Major Fixes
+- **Landscape Mode Support:** Fixed coordinate system mismatch for horizontal gameplay
+- **Ball Position Accuracy:** Magenta indicator now appears on actual ball location
+- **Prediction Alignment:** Trajectory lines follow proper ball path instead of flat lines
+- **Search Area Optimization:** Focused detection for landscape layout (avoids UI elements)
+
+### 🎯 Technical Implementation
+- Added orientation detection using WindowManager and display rotation
+- Implemented coordinate transformation between detection and overlay systems
+- Modified search areas: landscape uses center 80%, portrait uses upper 75%
+- Added screen info passing from ScreenCaptureService to PredictionOverlayService
+- Enhanced coordinate scaling and transformation in overlay rendering
+
+### 🐛 Root Cause Identified & Fixed
+The "flat horizontal line" issue was caused by coordinate system mismatch:
+- Game runs in landscape mode (horizontal)
+- Detection system was designed for portrait orientation
+- Ball detected in upper-middle area appeared as overlay in bottom-left corner
+- **FIXED** by proper coordinate transformation and orientation detection
+
+---
+
+## v2.6-DEBUG-VISUAL-INDICATOR (Previous Debug)
 **Release Date:** 2025-08-19  
 **APK:** `app-release-v2.6-DEBUG-VISUAL-INDICATOR.apk`  
 **Size:** 49MB  
@@ -14,7 +41,7 @@
 - **Relaxed Validation:** Lower thresholds for debugging (2+ positions, 10+ pixels, 10+ px/s)
 
 ### 🎯 Purpose
-Troubleshoot coordinate system mismatch causing flat horizontal prediction lines instead of proper ball trajectory following.
+This debug version helped identify the root cause of the "flat horizontal line" issue by showing exactly where the ball was being detected versus where the prediction overlay appeared.
 
 ---
 

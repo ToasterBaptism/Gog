@@ -20,6 +20,10 @@ class PredictionOverlayService : Service() {
         fun updatePredictions(predictions: List<PredictionPoint>) {
             instance?.updatePrediction(predictions)
         }
+        
+        fun updateScreenInfo(width: Int, height: Int, isLandscape: Boolean) {
+            instance?.updateScreenInfo(width, height, isLandscape)
+        }
     }
     
     private var windowManager: WindowManager? = null
@@ -88,6 +92,10 @@ class PredictionOverlayService : Service() {
         overlayView?.updatePrediction(predictions)
     }
     
+    fun updateScreenInfo(width: Int, height: Int, isLandscape: Boolean) {
+        overlayView?.updateScreenInfo(width, height, isLandscape)
+    }
+    
     data class PredictionPoint(
         val x: Float,
         val y: Float,
@@ -102,6 +110,12 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
     }
     
     private var predictions: List<PredictionOverlayService.PredictionPoint> = emptyList()
+    
+    // Screen info for coordinate transformations
+    private var screenWidth = 0
+    private var screenHeight = 0
+    private var isLandscapeMode = false
+    
     private val paint = Paint().apply {
         isAntiAlias = true
         strokeWidth = 8f
@@ -120,6 +134,35 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
         post { invalidate() } // Redraw on UI thread
     }
     
+    fun updateScreenInfo(width: Int, height: Int, isLandscape: Boolean) {
+        screenWidth = width
+        screenHeight = height
+        isLandscapeMode = isLandscape
+        Log.d(TAG, "🖥️ Screen info updated: ${width}x${height}, landscape: $isLandscape")
+    }
+    
+    // Transform detection coordinates to overlay coordinates
+    private fun transformCoordinates(x: Float, y: Float): Pair<Float, Float> {
+        // Get current view dimensions
+        val viewWidth = width.toFloat()
+        val viewHeight = height.toFloat()
+        
+        if (screenWidth == 0 || screenHeight == 0) {
+            // No screen info yet, use coordinates as-is
+            return Pair(x, y)
+        }
+        
+        // Scale coordinates from detection resolution to overlay resolution
+        val scaleX = viewWidth / screenWidth.toFloat()
+        val scaleY = viewHeight / screenHeight.toFloat()
+        
+        val transformedX = x * scaleX
+        val transformedY = y * scaleY
+        
+        Log.v(TAG, "🔄 Transform: ($x,$y) -> ($transformedX,$transformedY) [scale: $scaleX,$scaleY]")
+        return Pair(transformedX, transformedY)
+    }
+    
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         
@@ -129,15 +172,19 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
             // Draw current ball position indicator (large circle for debugging)
             if (predictions.isNotEmpty()) {
                 val currentPos = predictions[0]
+                val (transformedX, transformedY) = transformCoordinates(currentPos.x, currentPos.y)
+                
                 paint.color = Color.argb(200, 255, 0, 255) // Bright magenta
                 paint.style = Paint.Style.STROKE
                 paint.strokeWidth = 8f
-                canvas.drawCircle(currentPos.x, currentPos.y, 30f, paint) // Large circle around detected ball
+                canvas.drawCircle(transformedX, transformedY, 30f, paint) // Large circle around detected ball
                 
                 // Draw crosshair at detected position
                 paint.strokeWidth = 4f
-                canvas.drawLine(currentPos.x - 20f, currentPos.y, currentPos.x + 20f, currentPos.y, paint)
-                canvas.drawLine(currentPos.x, currentPos.y - 20f, currentPos.x, currentPos.y + 20f, paint)
+                canvas.drawLine(transformedX - 20f, transformedY, transformedX + 20f, transformedY, paint)
+                canvas.drawLine(transformedX, transformedY - 20f, transformedX, transformedY + 20f, paint)
+                
+                Log.d(TAG, "🎯 Ball indicator: original(${"%.1f".format(currentPos.x)},${"%.1f".format(currentPos.y)}) -> transformed(${"%.1f".format(transformedX)},${"%.1f".format(transformedY)})")
             }
             
             // Draw prediction path
@@ -146,6 +193,7 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
             
             for (i in predictions.indices) {
                 val point = predictions[i]
+                val (transformedX, transformedY) = transformCoordinates(point.x, point.y)
                 
                 // Color gradient from red to yellow to green based on time
                 val timeRatio = point.time / 3f // 3 seconds max
@@ -169,15 +217,15 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
                 }
                 
                 if (isFirst) {
-                    path.moveTo(point.x, point.y)
+                    path.moveTo(transformedX, transformedY)
                     isFirst = false
                 } else {
-                    path.lineTo(point.x, point.y)
+                    path.lineTo(transformedX, transformedY)
                 }
                 
                 // Draw small circles at prediction points
                 if (i % 3 == 0) { // Every 3rd point to avoid clutter
-                    canvas.drawCircle(point.x, point.y, 6f, paint)
+                    canvas.drawCircle(transformedX, transformedY, 6f, paint)
                 }
             }
             
@@ -189,29 +237,31 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
             // Draw current ball position (first point) with special highlight
             if (predictions.isNotEmpty()) {
                 val current = predictions.first()
+                val (currentX, currentY) = transformCoordinates(current.x, current.y)
                 ballPaint.color = Color.RED
                 ballPaint.alpha = 255
-                canvas.drawCircle(current.x, current.y, 12f, ballPaint)
+                canvas.drawCircle(currentX, currentY, 12f, ballPaint)
                 
                 // Draw velocity arrow
                 if (predictions.size > 1) {
                     val next = predictions[1]
+                    val (nextX, nextY) = transformCoordinates(next.x, next.y)
                     val arrowPaint = Paint().apply {
                         color = Color.WHITE
                         strokeWidth = 4f
                         style = Paint.Style.STROKE
                     }
                     
-                    val dx = next.x - current.x
-                    val dy = next.y - current.y
+                    val dx = nextX - currentX
+                    val dy = nextY - currentY
                     val length = kotlin.math.sqrt(dx * dx + dy * dy)
                     
                     if (length > 0) {
                         val scale = 30f / length // Normalize arrow length
-                        val endX = current.x + dx * scale
-                        val endY = current.y + dy * scale
+                        val endX = currentX + dx * scale
+                        val endY = currentY + dy * scale
                         
-                        canvas.drawLine(current.x, current.y, endX, endY, arrowPaint)
+                        canvas.drawLine(currentX, currentY, endX, endY, arrowPaint)
                         
                         // Draw arrowhead
                         val arrowAngle = kotlin.math.atan2(dy.toDouble(), dx.toDouble())
