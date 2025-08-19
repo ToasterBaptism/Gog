@@ -204,14 +204,23 @@ class ScreenCaptureService : Service() {
             try {
                 Log.d(TAG, "Initializing AI components...")
                 
-                // Initialize inference engine with comprehensive error handling
+                // Initialize inference engine - temporarily using stub to avoid crashes
                 inferenceEngine = try {
+                    Log.d(TAG, "Initializing inference engine...")
+                    // TODO: Re-enable TensorFlow Lite once model loading issues are resolved
+                    // For now, use stub to prevent crashes and allow app to function
+                    Log.i(TAG, "Using StubInferenceEngine to prevent crashes")
+                    StubInferenceEngine()
+                    
+                    // Commented out TensorFlow Lite initialization until model loading is fixed
+                    /*
                     Log.d(TAG, "Attempting to create TensorFlow Lite inference engine...")
                     val engine = TFLiteInferenceEngine(this@ScreenCaptureService)
                     Log.i(TAG, "TensorFlow Lite inference engine created successfully")
                     engine
+                    */
                 } catch (e: Exception) {
-                    Log.w(TAG, "TensorFlow Lite engine failed, falling back to stub: ${e.message}", e)
+                    Log.w(TAG, "Inference engine initialization failed, using stub: ${e.message}", e)
                     StubInferenceEngine()
                 }
                 
