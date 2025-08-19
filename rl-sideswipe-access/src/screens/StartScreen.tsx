@@ -140,6 +140,13 @@ const StartScreen: React.FC = () => {
       if (isActive) {
         console.log('Stopping service...');
         setStatusText('Stopping...');
+        
+        // Clear any pending timeouts
+        if (startCheckTimeoutRef.current) {
+          clearTimeout(startCheckTimeoutRef.current);
+          startCheckTimeoutRef.current = null;
+        }
+        
         await NativeControl.stop();
         setIsActive(false);
         setStatusText('Ready to start');
@@ -153,7 +160,19 @@ const StartScreen: React.FC = () => {
         console.log('NativeControl.start() completed successfully');
         
         setIsActive(true);
-        setStatusText('Capturing...');
+        setStatusText('Capturing... (Service is running in background)');
+        
+        // Show success message
+        Alert.alert(
+          'Service Started!', 
+          'The screen capture service is now running in the background.\n\n' +
+          '✅ You can now minimize this app\n' +
+          '✅ Open Rocket League Sideswipe\n' +
+          '✅ The app will monitor for the ball automatically\n\n' +
+          'Note: The current version uses a stub AI engine for testing. ' +
+          'Ball detection is not yet implemented but the service is capturing frames.',
+          [{ text: 'OK' }]
+        );
         
         // Check if service actually started after a short delay
         const attemptId = ++startAttemptRef.current;
@@ -180,6 +199,13 @@ const StartScreen: React.FC = () => {
     } catch (error: any) {
       console.error('Failed to start/stop service:', error);
       console.error('Error details:', JSON.stringify(error, null, 2));
+      
+      // Clear any pending timeouts on error
+      if (startCheckTimeoutRef.current) {
+        clearTimeout(startCheckTimeoutRef.current);
+        startCheckTimeoutRef.current = null;
+      }
+      
       setIsActive(false);
       setStatusText('Error occurred');
       

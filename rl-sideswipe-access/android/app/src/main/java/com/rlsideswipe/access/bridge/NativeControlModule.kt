@@ -356,11 +356,44 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
         }
         return false
     }
+    
+    private fun isServiceRunning(): Boolean {
+        return try {
+            val activityManager = reactApplicationContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val services = activityManager.getRunningServices(Integer.MAX_VALUE)
+            val serviceName = ScreenCaptureService::class.java.name
+            
+            for (service in services) {
+                if (serviceName == service.service.className) {
+                    Log.d("NativeControl", "ScreenCaptureService is running")
+                    return true
+                }
+            }
+            Log.d("NativeControl", "ScreenCaptureService is not running")
+            false
+        } catch (e: Exception) {
+            Log.e("NativeControl", "Error checking if service is running", e)
+            false
+        }
+    }
 
     @ReactMethod
     fun start(promise: Promise) {
         Log.d("NativeControl", "=== START METHOD CALLED ===")
         try {
+            // Check if service is already running
+            if (isServiceRunning()) {
+                Log.w("NativeControl", "Service is already running, stopping it first...")
+                try {
+                    val serviceIntent = Intent(reactApplicationContext, ScreenCaptureService::class.java)
+                    reactApplicationContext.stopService(serviceIntent)
+                    // Give it a moment to stop
+                    Thread.sleep(500)
+                } catch (e: Exception) {
+                    Log.w("NativeControl", "Failed to stop existing service: ${e.message}")
+                }
+            }
+            
             Log.d("NativeControl", "Starting screen capture...")
             val activity = currentActivity
             Log.d("NativeControl", "Current activity: $activity")
