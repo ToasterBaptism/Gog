@@ -203,7 +203,8 @@ class ScreenCaptureService : Service() {
         backgroundHandler?.post {
             try {
                 Log.d(TAG, "Initializing AI components...")
-                Log.i(TAG, "=== v2.21 TENSORFLOW LITE COMPLETELY DISABLED ===")
+                Log.i(TAG, "=== v2.22 TENSORFLOW LITE CLASS COMPLETELY REMOVED ===")
+                Log.i(TAG, "=== NO TENSORFLOW LITE CODE EXISTS IN THE APP ANYMORE ===")
                 
                 // Initialize inference engine - using stub only to prevent TensorFlow Lite crashes
                 inferenceEngine = try {
