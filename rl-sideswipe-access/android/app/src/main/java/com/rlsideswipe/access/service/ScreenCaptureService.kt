@@ -24,7 +24,7 @@ import androidx.lifecycle.MutableLiveData
 import com.rlsideswipe.access.R
 import com.rlsideswipe.access.ai.FrameResult
 import com.rlsideswipe.access.ai.InferenceEngine
-import com.rlsideswipe.access.ai.TFLiteInferenceEngine
+// import com.rlsideswipe.access.ai.TFLiteInferenceEngine // DISABLED to prevent crashes
 import com.rlsideswipe.access.ai.StubInferenceEngine
 import com.rlsideswipe.access.ai.TrajectoryPredictor
 import com.rlsideswipe.access.ai.KalmanTrajectoryPredictor
@@ -203,22 +203,13 @@ class ScreenCaptureService : Service() {
         backgroundHandler?.post {
             try {
                 Log.d(TAG, "Initializing AI components...")
+                Log.i(TAG, "=== v2.21 TENSORFLOW LITE COMPLETELY DISABLED ===")
                 
-                // Initialize inference engine - temporarily using stub to avoid crashes
+                // Initialize inference engine - using stub only to prevent TensorFlow Lite crashes
                 inferenceEngine = try {
                     Log.d(TAG, "Initializing inference engine...")
-                    // TODO: Re-enable TensorFlow Lite once model loading issues are resolved
-                    // For now, use stub to prevent crashes and allow app to function
-                    Log.i(TAG, "Using StubInferenceEngine to prevent crashes")
+                    Log.i(TAG, "=== USING STUB INFERENCE ENGINE ONLY - NO TENSORFLOW LITE ===")
                     StubInferenceEngine()
-                    
-                    // Commented out TensorFlow Lite initialization until model loading is fixed
-                    /*
-                    Log.d(TAG, "Attempting to create TensorFlow Lite inference engine...")
-                    val engine = TFLiteInferenceEngine(this@ScreenCaptureService)
-                    Log.i(TAG, "TensorFlow Lite inference engine created successfully")
-                    engine
-                    */
                 } catch (e: Exception) {
                     Log.w(TAG, "Inference engine initialization failed, using stub: ${e.message}", e)
                     StubInferenceEngine()
