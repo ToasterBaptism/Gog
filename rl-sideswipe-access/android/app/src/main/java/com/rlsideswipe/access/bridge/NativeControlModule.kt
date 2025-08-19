@@ -103,42 +103,26 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
         try {
             val missingPermissions = mutableListOf<String>()
             
-            // Check runtime permissions (only those that actually require runtime permission)
-            val runtimePermissions = mutableListOf<String>()
-            runtimePermissions.add(Manifest.permission.RECORD_AUDIO)
+            // Only check the most critical permissions that actually matter for functionality
+            // Skip install-time permissions as they're automatically granted
             
-            // Install-time permissions (automatically granted if in manifest)
-            val installTimePermissions = listOf(
-                Manifest.permission.VIBRATE,
-                Manifest.permission.WAKE_LOCK,
-                Manifest.permission.FOREGROUND_SERVICE,
-                Manifest.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION
-            )
+            // Check microphone permission (required for audio features)
+            if (ContextCompat.checkSelfPermission(reactApplicationContext, Manifest.permission.RECORD_AUDIO) 
+                != PackageManager.PERMISSION_GRANTED) {
+                missingPermissions.add(Manifest.permission.RECORD_AUDIO)
+                Log.d("NativeControl", "Missing permission: RECORD_AUDIO")
+            }
             
-            // Check notification permission for Android 13+
+            // Check notification permission for Android 13+ (but don't fail if missing)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                runtimePermissions.add(Manifest.permission.POST_NOTIFICATIONS)
-            }
-            
-            // Check runtime permissions
-            for (permission in runtimePermissions) {
-                if (ContextCompat.checkSelfPermission(reactApplicationContext, permission) 
+                if (ContextCompat.checkSelfPermission(reactApplicationContext, Manifest.permission.POST_NOTIFICATIONS) 
                     != PackageManager.PERMISSION_GRANTED) {
-                    missingPermissions.add(permission)
-                    Log.d("NativeControl", "Missing runtime permission: $permission")
+                    Log.d("NativeControl", "Missing permission: POST_NOTIFICATIONS (non-critical)")
+                    // Don't add to missing permissions - this is optional
                 }
             }
             
-            // Check install-time permissions (these should always be granted if in manifest)
-            for (permission in installTimePermissions) {
-                if (ContextCompat.checkSelfPermission(reactApplicationContext, permission) 
-                    != PackageManager.PERMISSION_GRANTED) {
-                    missingPermissions.add(permission)
-                    Log.w("NativeControl", "Missing install-time permission (check manifest): $permission")
-                }
-            }
-            
-            // Check system alert window permission separately
+            // Check system alert window permission (critical for overlay)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 if (!Settings.canDrawOverlays(reactApplicationContext)) {
                     missingPermissions.add("SYSTEM_ALERT_WINDOW")
@@ -146,8 +130,21 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
                 }
             }
             
-            Log.d("NativeControl", "Permission check complete. Missing: ${missingPermissions.size}")
-            promise.resolve(missingPermissions.isEmpty())
+            // Check accessibility service (most critical)
+            if (!isAccessibilityServiceEnabled()) {
+                missingPermissions.add("ACCESSIBILITY_SERVICE")
+                Log.d("NativeControl", "Missing permission: ACCESSIBILITY_SERVICE")
+            }
+            
+            Log.d("NativeControl", "Permission check complete. Missing critical permissions: ${missingPermissions.size}")
+            Log.d("NativeControl", "Missing permissions: $missingPermissions")
+            
+            // Only fail if we're missing truly critical permissions
+            val criticalMissing = missingPermissions.filter { 
+                it == "ACCESSIBILITY_SERVICE" || it == "SYSTEM_ALERT_WINDOW" 
+            }
+            
+            promise.resolve(criticalMissing.isEmpty())
         } catch (e: Exception) {
             Log.e("NativeControl", "Failed to check permissions", e)
             promise.reject("ERROR", "Failed to check permissions", e)
@@ -287,25 +284,44 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
                 Settings.Secure.ACCESSIBILITY_ENABLED
             )
             
+            Log.d("NativeControl", "Accessibility globally enabled: $accessibilityEnabled")
+            
             if (accessibilityEnabled == 1) {
                 val settingValue = Settings.Secure.getString(
                     reactApplicationContext.contentResolver,
                     Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
                 )
                 
+                Log.d("NativeControl", "Enabled accessibility services: $settingValue")
+                
                 if (!settingValue.isNullOrEmpty()) {
                     val splitter = TextUtils.SimpleStringSplitter(':')
                     splitter.setString(settingValue)
                     
+                    val expected = ComponentName(reactApplicationContext.packageName, com.rlsideswipe.access.service.MainAccessibilityService::class.java.name).flattenToString()
+                    Log.d("NativeControl", "Looking for service: $expected")
+                    
                     while (splitter.hasNext()) {
                         val accessibilityService = splitter.next()
-                        val expected = ComponentName(reactApplicationContext.packageName, com.rlsideswipe.access.service.MainAccessibilityService::class.java.name).flattenToString()
+                        Log.d("NativeControl", "Checking service: $accessibilityService")
+                        
+                        // Try exact match first
                         if (accessibilityService == expected) {
+                            Log.d("NativeControl", "Found exact match for accessibility service")
+                            return true
+                        }
+                        
+                        // Try partial match for OnePlus compatibility
+                        if (accessibilityService.contains(reactApplicationContext.packageName) && 
+                            accessibilityService.contains("MainAccessibilityService")) {
+                            Log.d("NativeControl", "Found partial match for accessibility service")
                             return true
                         }
                     }
                 }
             }
+            
+            Log.d("NativeControl", "Accessibility service not found")
             return false
         } catch (e: Exception) {
             Log.e("NativeControl", "Failed to check accessibility service", e)
