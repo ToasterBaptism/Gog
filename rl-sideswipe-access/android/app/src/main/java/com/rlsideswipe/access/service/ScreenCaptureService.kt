@@ -85,7 +85,11 @@ class ScreenCaptureService : Service() {
             Log.d(TAG, "ScreenCaptureService onStartCommand called")
             
             val notification = createNotification()
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
             Log.d(TAG, "Foreground service started with notification")
             
             val captureIntent = intent?.getParcelableExtra<Intent>("captureIntent")
