@@ -21,6 +21,23 @@ interface NativeControlInterface {
   debugPermissionSystem(): Promise<any>;
 }
 
-const { NativeControlModule } = NativeModules;
+const NativeControl = NativeModules.NativeControlModule as NativeControlInterface | undefined;
 
-export default NativeControlModule as NativeControlInterface;
+const Fallback: NativeControlInterface = {
+  isServiceEnabled: async () => false,
+  openAccessibilitySettings: () => { throw new Error('NativeControlModule not linked'); },
+  openOverlaySettings: () => { throw new Error('NativeControlModule not linked'); },
+  checkPermissions: async () => false,
+  requestPermissions: async () => { throw new Error('NativeControlModule not linked'); },
+  getDetailedPermissionStatus: async () => ({}),
+  checkAllRequiredPermissions: async () => ({}),
+  hasMediaProjectionPermission: async () => false,
+  start: async () => { throw new Error('NativeControlModule not linked'); },
+  stop: async () => { throw new Error('NativeControlModule not linked'); },
+  checkBatteryOptimization: async () => false,
+  openBatteryOptimizationSettings: async () => { throw new Error('NativeControlModule not linked'); },
+  isAccessibilityServiceActuallyRunning: async () => false,
+  debugPermissionSystem: async () => ({}),
+};
+
+export default (NativeControl ?? Fallback);

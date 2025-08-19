@@ -36,5 +36,19 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "jest": {
+    "preset": "react-native",
+    "transformIgnorePatterns": [
+      "node_modules/(?!(react-native|@react-native|react-native-permissions|react-native-vector-icons)/)"
+    ],
+    "moduleFileExtensions": [
+      "ts",
+      "tsx",
+      "js",
+      "jsx",
+      "json",
+      "node"
+    ]
   }
 }

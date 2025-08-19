@@ -16,7 +16,7 @@ This guide addresses the common issue where the accessibility service keeps turn
 
 ### 1. Check Service Status
 The app now shows detailed status information:
-- ✅ **"Ready to start"** - All good, service is running
+- ✅ **"Ready to start"** - All prerequisites are met; tap Start to begin capturing
 - ⚠️ **"Accessibility Service Not Running"** - Service enabled but killed by system
 - ❌ **"Needs Accessibility Service"** - Service not enabled in settings
 - ⚠️ **"Battery Optimization Enabled"** - System may kill the service
@@ -81,7 +81,7 @@ Android's battery optimization can kill accessibility services even when they're
 1. **Check for conflicting accessibility services** - Disable other accessibility apps temporarily
 2. **Restart device** after enabling the service
 3. **Check Android version** - Some Android 12+ versions are more aggressive
-4. **Developer options** - Enable "Don't keep activities" OFF if enabled
+4. **Developer options** - Ensure "Don't keep activities" is OFF
 
 ### Service Enabled But Not Working:
 1. **Force stop the app** and restart it
@@ -104,6 +104,12 @@ Enhanced logging throughout the service lifecycle:
 ```bash
 adb logcat | grep -E "(MainAccessibilityService|NativeControl|ScreenCapture)"
 ```
+
+Windows (PowerShell):
+```powershell
+adb logcat | Select-String -Pattern 'MainAccessibilityService|NativeControl|ScreenCapture'
+```
+
 
 Key log messages to look for:
 - `Accessibility service connected successfully`

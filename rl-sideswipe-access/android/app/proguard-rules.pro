@@ -23,12 +23,17 @@
 # React Native
 -keep class com.facebook.react.** { *; }
 -keep class com.facebook.hermes.** { *; }
+# Keep annotated React methods on app modules to prevent obfuscation/removal
+-keepattributes *Annotation*
+-keepclassmembers class * extends com.facebook.react.bridge.ReactContextBaseJavaModule {
+  @com.facebook.react.bridge.ReactMethod <methods>;
+}
 
-# TensorFlow Lite
--keep class org.tensorflow.lite.** { *; }
--keep class org.tensorflow.lite.gpu.** { *; }
--keep class org.tensorflow.lite.support.** { *; }
--dontwarn org.tensorflow.lite.gpu.**
+# TensorFlow Lite (removed)
+# -keep class org.tensorflow.lite.** { *; }
+# -keep class org.tensorflow.lite.gpu.** { *; }
+# -keep class org.tensorflow.lite.support.** { *; }
+# -dontwarn org.tensorflow.lite.gpu.**
 
 # MediaPipe
 -keep class com.google.mediapipe.** { *; }
@@ -37,6 +42,8 @@
 
 # OpenCV
 -keep class org.opencv.** { *; }
+-keep class com.rlsideswipe.access.bridge.** { *; }
+
 
 # Accessibility Service
 -keep class com.rlsideswipe.access.service.** { *; }

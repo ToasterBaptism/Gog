@@ -23,7 +23,10 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
   onClose,
 }) => {
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>({});
-  const [loading, setLoading] = useState(false);
+  const serviceEnabled = !!permissionStatus.ACCESSIBILITY_SERVICE;
+  const serviceActuallyRunning = !!permissionStatus.ACCESSIBILITY_SERVICE; // Approximation
+  const permissionsGranted = !!permissionStatus.RECORD_AUDIO && !!permissionStatus.SYSTEM_ALERT_WINDOW;
+  const batteryOptimized = !(permissionStatus.BATTERY_OPTIMIZATION_IGNORED ?? false);
 
   useEffect(() => {
     if (visible) {
@@ -41,6 +44,8 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
     }
   };
 
+  const handleEnableAccessibility = handleAccessibilitySettings;
+
   const handleAccessibilitySettings = () => {
     NativeControl.openAccessibilitySettings();
   };
@@ -48,8 +53,8 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
   const handleRequestPermissions = async () => {
     try {
       await NativeControl.requestPermissions();
-      // Check status after a delay to see if permissions were granted
-      setTimeout(checkStatus, 1000);
+      // Re-check status after a short delay to see if permissions were granted
+      setTimeout(checkPermissions, 1000);
     } catch (error) {
       console.error('Failed to request permissions:', error);
     }

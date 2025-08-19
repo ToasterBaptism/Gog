@@ -3,6 +3,8 @@ package com.rlsideswipe.access.bridge
 import android.Manifest
 import android.app.Activity
 import android.app.ActivityManager
+import android.content.ComponentName
+
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -51,10 +53,9 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
                         val accessibilityService = splitter.next()
                         Log.d("NativeControl", "Checking service: $accessibilityService")
                         
-                        // Check for multiple possible formats
-                        if (accessibilityService.contains("com.rlsideswipe.access/.service.MainAccessibilityService") ||
-                            accessibilityService.contains("com.rlsideswipe.access/com.rlsideswipe.access.service.MainAccessibilityService") ||
-                            (accessibilityService.contains("com.rlsideswipe.access") && accessibilityService.contains("MainAccessibilityService"))) {
+                        // Compare against the exact flattened component name
+                        val expected = ComponentName(reactApplicationContext.packageName, com.rlsideswipe.access.service.MainAccessibilityService::class.java.name).flattenToString()
+                        if (accessibilityService == expected) {
                             Log.d("NativeControl", "Service found: $accessibilityService")
                             promise.resolve(true)
                             return
@@ -110,7 +111,8 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
             val installTimePermissions = listOf(
                 Manifest.permission.VIBRATE,
                 Manifest.permission.WAKE_LOCK,
-                Manifest.permission.FOREGROUND_SERVICE
+                Manifest.permission.FOREGROUND_SERVICE,
+                Manifest.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION
             )
             
             // Check notification permission for Android 13+
@@ -231,7 +233,8 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
             val installTimePermissions = listOf(
                 Manifest.permission.VIBRATE,
                 Manifest.permission.WAKE_LOCK,
-                Manifest.permission.FOREGROUND_SERVICE
+                Manifest.permission.FOREGROUND_SERVICE,
+                Manifest.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION
             )
             
             for (permission in installTimePermissions) {
@@ -296,8 +299,8 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
                     
                     while (splitter.hasNext()) {
                         val accessibilityService = splitter.next()
-                        if (accessibilityService.contains("com.rlsideswipe.access") && 
-                            accessibilityService.contains("MainAccessibilityService")) {
+                        val expected = ComponentName(reactApplicationContext.packageName, com.rlsideswipe.access.service.MainAccessibilityService::class.java.name).flattenToString()
+                        if (accessibilityService == expected) {
                             return true
                         }
                     }
@@ -386,7 +389,11 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
 
                         try {
                             Log.d("NativeControl", "Starting foreground service...")
-                            val result = reactApplicationContext.startForegroundService(serviceIntent)
+                            val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    reactApplicationContext.startForegroundService(serviceIntent)
+                                } else {
+                                    reactApplicationContext.startService(serviceIntent)
+                                }
                             Log.d("NativeControl", "Service start result: $result")
                             
                             promise.resolve(null)
@@ -594,7 +601,21 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
             results["batteryOptimizationIgnored"] = batteryOptimized
             
             // Overall readiness
-            val allReady = accessibilityEnabled && overlayEnabled && missingRuntimePermissions.isEmpty() && batteryOptimized
+            val installTimePermissions = listOf(
+                Manifest.permission.VIBRATE,
+                Manifest.permission.WAKE_LOCK,
+                Manifest.permission.FOREGROUND_SERVICE,
+                Manifest.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION
+            )
+            var installPermissionsOk = true
+            for (permission in installTimePermissions) {
+                if (ContextCompat.checkSelfPermission(reactApplicationContext, permission) 
+                    != PackageManager.PERMISSION_GRANTED) {
+                    installPermissionsOk = false
+                    break
+                }
+            }
+            val allReady = accessibilityEnabled && overlayEnabled && missingRuntimePermissions.isEmpty() && batteryOptimized && installPermissionsOk
             results["allPermissionsReady"] = allReady
             
             Log.d("NativeControl", "Permission check results: $results")

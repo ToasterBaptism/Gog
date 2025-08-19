@@ -20,7 +20,7 @@ import com.rlsideswipe.access.R
 class MainAccessibilityService : AccessibilityService() {
     
     companion object {
-        private const val TAG = "AccessibilityService"
+        private const val TAG = "MainAccessibilityService"
         @Volatile
         private var instance: MainAccessibilityService? = null
         
@@ -41,6 +41,14 @@ class MainAccessibilityService : AccessibilityService() {
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             Log.d(TAG, "Service connected: $name")
+            try {
+                val binder = service as? ScreenCaptureService.LocalBinder
+                screenCaptureService = binder?.getService()
+                observeScreenCaptureData()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to get ScreenCaptureService from binder", e)
+            }
+            isServiceBound = true
         }
         
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -103,11 +111,27 @@ class MainAccessibilityService : AccessibilityService() {
     }
     
     private fun observeScreenCaptureData() {
-        // In a real implementation, we would need a way to observe the ScreenCaptureService data
-        // For now, this is a stub that would be connected to the service's LiveData
-        
-        // This would typically be done through a bound service or static references
-        // For the stub implementation, we'll leave this empty
+        try {
+            if (!isServiceBound) {
+                Log.d(TAG, "Service not bound yet; attempting to bind")
+                val intent = Intent(this@MainAccessibilityService, ScreenCaptureService::class.java)
+                isServiceBound = bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+                Log.d(TAG, "bindService returned: $isServiceBound")
+                if (!isServiceBound) return
+            }
+            screenCaptureService?.frameResults?.observeForever(Observer { result ->
+                result?.let {
+                    overlayView?.setDetection(it.ball)
+                }
+            })
+            screenCaptureService?.trajectoryPoints?.observeForever(Observer { points ->
+                points?.let {
+                    overlayView?.setTrajectory(it)
+                }
+            })
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to observe screen capture data", e)
+        }
     }
     
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -139,7 +163,7 @@ class MainAccessibilityService : AccessibilityService() {
         // Clean up overlay
         try {
             if (isOverlayAdded && overlayLayout != null) {
-                windowManager?.removeView(overlayLayout)
+                windowManager?.removeViewImmediate(overlayLayout)
                 isOverlayAdded = false
                 Log.d(TAG, "Overlay removed successfully")
             }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Alert,
   AppState,
+  AppStateStatus,
 } from 'react-native';
 import NativeControl from '../lib/bridge/NativeControl';
 import PermissionOverlay from '../components/PermissionOverlay';
@@ -16,18 +17,28 @@ const StartScreen: React.FC = () => {
   const [permissionsGranted, setPermissionsGranted] = useState(false);
   const [showPermissionOverlay, setShowPermissionOverlay] = useState(false);
   const [statusText, setStatusText] = useState('Service inactive');
+  const mountedRef = useRef(true);
+  const startCheckTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startAttemptRef = useRef(0);
 
   useEffect(() => {
     checkServiceStatus();
     
-    const handleAppStateChange = (nextAppState: string) => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active') {
         checkServiceStatus();
       }
     };
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
-    return () => subscription?.remove();
+    return () => {
+      mountedRef.current = false;
+      if (startCheckTimeoutRef.current) {
+        clearTimeout(startCheckTimeoutRef.current);
+        startCheckTimeoutRef.current = null;
+      }
+      subscription?.remove();
+    };
   }, []);
 
   const checkServiceStatus = async () => {
@@ -71,7 +82,10 @@ const StartScreen: React.FC = () => {
     }
   };
 
+  const [isBusy, setIsBusy] = useState(false);
   const handleStartStop = async () => {
+    if (isBusy) return;
+    setIsBusy(true);
     console.log('handleStartStop called, isActive:', isActive);
     console.log('serviceEnabled:', serviceEnabled, 'permissionsGranted:', permissionsGranted);
     
@@ -140,10 +154,11 @@ const StartScreen: React.FC = () => {
         setStatusText('Capturing...');
         
         // Check if service actually started after a short delay
-        setTimeout(async () => {
+        const attemptId = ++startAttemptRef.current;
+        startCheckTimeoutRef.current = setTimeout(async () => {
           try {
             const actuallyRunning = await NativeControl.isAccessibilityServiceActuallyRunning();
-            if (!actuallyRunning) {
+            if (mountedRef.current && startAttemptRef.current === attemptId && !actuallyRunning) {
               setIsActive(false);
               setStatusText('Service failed to start');
               Alert.alert(
@@ -185,6 +200,11 @@ const StartScreen: React.FC = () => {
                       '1. Make sure the app is in the foreground\n' +
                       '2. Try closing and reopening the app\n' +
                       '3. Restart your device if the problem persists';
+      } else if (error?.message?.includes('No activity available')) {
+        errorTitle = 'App Not In Foreground';
+        errorMessage = 'The app must be in the foreground to request screen capture.\n\n' +
+                       '1. Bring the app to the foreground\n' +
+                       '2. Tap "Start" again';
       } else if (error?.message?.includes('accessibility')) {
         errorTitle = 'Accessibility Service';
         errorMessage = 'Accessibility service is not properly enabled. Please check settings.';
@@ -193,6 +213,8 @@ const StartScreen: React.FC = () => {
       }
       
       Alert.alert(errorTitle, errorMessage);
+    } finally {
+      setIsBusy(false);
     }
   };
 
@@ -211,7 +233,8 @@ const StartScreen: React.FC = () => {
             styles.startButton,
             isActive && styles.startButtonActive,
           ]}
-          onPress={handleStartStop}>
+          onPress={handleStartStop}
+          disabled={isBusy}>
           <Text style={[
             styles.startButtonText,
             isActive && styles.startButtonTextActive,

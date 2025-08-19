@@ -119,7 +119,7 @@ Log.d("NativeControl", "MediaProjection callback invoked with intent: $captureIn
 - ✅ v2.17 committed and pushed to GitHub
 - ✅ Debug and Release APKs built successfully
 - ✅ Web server rehosted on port 12000
-- ✅ APKs available at: https://work-1-uhyrrhbsnivabois.prod-runtime.all-hands.dev
+- ✅ APKs available at: <internal distribution link>
 
 ## Next Steps
 1. **Test the fixed callback handling** - The primary issue should now be resolved

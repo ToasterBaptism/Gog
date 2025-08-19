@@ -2,15 +2,17 @@ package com.rlsideswipe.access.service
 
 import android.app.*
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.ImageFormat
-import android.graphics.PixelFormat
+
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.Image
 import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
+import android.os.Binder
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
@@ -67,6 +69,7 @@ class ScreenCaptureService : Service() {
         super.onCreate()
         createNotificationChannel()
         setupBackgroundThread()
+        lastPerformanceLog = System.currentTimeMillis()
         Log.d(TAG, "ScreenCaptureService created")
     }
     
@@ -82,7 +85,7 @@ class ScreenCaptureService : Service() {
             Log.d(TAG, "ScreenCaptureService onStartCommand called")
             
             val notification = createNotification()
-            startForeground(NOTIFICATION_ID, notification)
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
             Log.d(TAG, "Foreground service started with notification")
             
             val captureIntent = intent?.getParcelableExtra<Intent>("captureIntent")
@@ -113,7 +116,11 @@ class ScreenCaptureService : Service() {
         }
     }
     
-    override fun onBind(intent: Intent?): IBinder? = null
+    inner class LocalBinder : Binder() {
+        fun getService(): ScreenCaptureService = this@ScreenCaptureService
+    }
+    private val binder = LocalBinder()
+    override fun onBind(intent: Intent?): IBinder? = binder
     
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -162,12 +169,8 @@ class ScreenCaptureService : Service() {
             
             Log.d(TAG, "Display: ${width}x${height}, density: $density")
             
-            // Use YUV_420_888 for better performance, fallback to RGBA_8888
-            val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                ImageFormat.YUV_420_888
-            } else {
-                PixelFormat.RGBA_8888
-            }
+            // Use YUV_420_888 for better performance
+            val format = ImageFormat.YUV_420_888
             
             Log.d(TAG, "Creating ImageReader with format: $format")
             imageReader = ImageReader.newInstance(width, height, format, 3) // Increased buffer size

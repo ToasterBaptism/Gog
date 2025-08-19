@@ -105,21 +105,15 @@ dependencies {
     implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.8.4"
     implementation "androidx.activity:activity-ktx:1.9.1"
     
-    // TensorFlow Lite
-    implementation "org.tensorflow:tensorflow-lite:2.14.0"
-    implementation "org.tensorflow:tensorflow-lite-gpu:2.14.0"
-    implementation "org.tensorflow:tensorflow-lite-support:0.4.4"
-    
     // MediaPipe Tasks Vision
     implementation "com.google.mediapipe:tasks-vision:0.10.14"
-    
-    // OpenCV (commented out for initial build)
-    // implementation files('libs/opencv-480.jar')
     
     // Audio
     implementation "androidx.media:media:1.7.0"
 
     implementation("com.facebook.react:react-android")
+    // In case MediaPipe is not used at runtime, keep it here only if required
+
 
     // Manual React Native module dependencies - autolinking disabled
     implementation project(':react-native-permissions')
@@ -128,7 +122,8 @@ dependencies {
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {
-        implementation jscFlavor
+        // Explicit JSC dependency to avoid undefined jscFlavor
+        implementation "org.webkit:android-jsc:+"
     }
 }
 
@@ -139,9 +134,7 @@ task cleanAutolinking {
     }
 }
 
-// Run before compilation
-tasks.whenTaskAdded { task ->
-    if (task.name.contains('compile') && task.name.contains('Java')) {
-        task.dependsOn cleanAutolinking
-    }
+// Run once before building sources
+tasks.named("preBuild") {
+    dependsOn(cleanAutolinking)
 }
