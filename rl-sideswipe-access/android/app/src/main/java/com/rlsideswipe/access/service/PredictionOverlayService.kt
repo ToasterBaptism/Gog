@@ -120,13 +120,26 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
         post { invalidate() } // Redraw on UI thread
     }
     
-    public override fun onDraw(canvas: Canvas?) {
+    override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        if (canvas == null) return
         
         if (predictions.isEmpty()) return
         
         try {
+            // Draw current ball position indicator (large circle for debugging)
+            if (predictions.isNotEmpty()) {
+                val currentPos = predictions[0]
+                paint.color = Color.argb(200, 255, 0, 255) // Bright magenta
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = 8f
+                canvas.drawCircle(currentPos.x, currentPos.y, 30f, paint) // Large circle around detected ball
+                
+                // Draw crosshair at detected position
+                paint.strokeWidth = 4f
+                canvas.drawLine(currentPos.x - 20f, currentPos.y, currentPos.x + 20f, currentPos.y, paint)
+                canvas.drawLine(currentPos.x, currentPos.y - 20f, currentPos.x, currentPos.y + 20f, paint)
+            }
+            
             // Draw prediction path
             val path = Path()
             var isFirst = true

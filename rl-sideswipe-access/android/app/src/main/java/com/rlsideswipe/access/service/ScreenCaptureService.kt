@@ -398,17 +398,31 @@ class ScreenCaptureService : Service() {
             var bestY = -1f
             var maxBallPixels = 0
             
-            // Grid search for ball-colored regions
-            val gridSize = 50
-            for (y in 0 until height step gridSize) {
+            // Focus on upper 2/3 of screen where ball typically appears (avoid UI elements at bottom)
+            val searchHeight = (height * 0.75).toInt() // Only search upper 75% of screen
+            val searchStartY = (height * 0.1).toInt() // Skip top 10% (UI elements)
+            
+            // Grid search for ball-colored regions in focused area
+            val gridSize = 30 // Smaller grid for better precision
+            var detectionRegions = mutableListOf<String>()
+            
+            for (y in searchStartY until searchHeight step gridSize) {
                 for (x in 0 until width step gridSize) {
                     val ballPixelCount = countBallPixelsInRegion(bitmap, x, y, gridSize)
+                    if (ballPixelCount > 5) { // Log any significant detection
+                        detectionRegions.add("($x,$y):$ballPixelCount")
+                    }
                     if (ballPixelCount > maxBallPixels) {
                         maxBallPixels = ballPixelCount
                         bestX = x.toFloat() + gridSize / 2f
                         bestY = y.toFloat() + gridSize / 2f
                     }
                 }
+            }
+            
+            // Log detection regions for debugging
+            if (detectionRegions.isNotEmpty()) {
+                Log.d(TAG, "🔍 DETECTION REGIONS: ${detectionRegions.take(5).joinToString(", ")}")
             }
             
             if (maxBallPixels > 10) { // Found potential ball
@@ -418,32 +432,45 @@ class ScreenCaptureService : Service() {
                 val currentTime = System.currentTimeMillis()
                 addBallToHistory(bestX, bestY, currentTime)
                 
-                // Calculate velocity and predict trajectory (only if we have reliable detection)
-                if (ballHistory.size >= 3 && maxBallPixels >= 20) { // Need at least 3 positions and decent detection
+                // Always show current ball position for debugging
+                Log.d(TAG, "🎯 BALL DETECTED: Position ($bestX, $bestY), Pixels: $maxBallPixels, Screen: ${width}x${height}")
+                
+                // Calculate velocity and predict trajectory (relaxed validation for debugging)
+                if (ballHistory.size >= 2 && maxBallPixels >= 10) { // Relaxed requirements for debugging
                     val velocity = calculateBallVelocity()
                     if (velocity != null) {
                         val (velX, velY) = velocity
                         val speed = kotlin.math.sqrt(velX * velX + velY * velY)
-                        // Only show predictions if ball is moving fast enough (avoid noise)
-                        if (speed > 50f) { // Minimum 50 pixels/second
+                        Log.d(TAG, "🚀 VELOCITY: ($velX, $velY), Speed: $speed px/s")
+                        
+                        // Show predictions even for slow movement (for debugging)
+                        if (speed > 10f) { // Much lower threshold for debugging
                             val predictions = predictBallTrajectory(bestX, bestY, velX, velY)
                             if (predictions.isNotEmpty()) {
                                 updatePredictionOverlay(predictions)
-                                Log.d(TAG, "Ball trajectory predicted: ${predictions.size} points, velocity: ($velX, $velY), speed: $speed")
+                                Log.d(TAG, "📈 PREDICTION: ${predictions.size} points, first: (${predictions[0].x}, ${predictions[0].y}), last: (${predictions.last().x}, ${predictions.last().y})")
                             }
                         } else {
-                            // Clear overlay if ball is moving too slowly (likely detection noise)
-                            updatePredictionOverlay(emptyList())
-                            Log.d(TAG, "Ball moving too slowly ($speed px/s), clearing prediction")
+                            // Still show a simple prediction for very slow movement
+                            val staticPredictions = listOf(
+                                PredictionPoint(bestX, bestY, 0f),
+                                PredictionPoint(bestX + velX, bestY + velY, 1f),
+                                PredictionPoint(bestX + velX * 2, bestY + velY * 2, 2f)
+                            )
+                            updatePredictionOverlay(staticPredictions)
+                            Log.d(TAG, "📍 STATIC PREDICTION: Ball moving slowly ($speed px/s)")
                         }
                     } else {
-                        updatePredictionOverlay(emptyList())
-                        Log.d(TAG, "No velocity data available")
+                        // Show current position even without velocity
+                        val currentPredictions = listOf(PredictionPoint(bestX, bestY, 0f))
+                        updatePredictionOverlay(currentPredictions)
+                        Log.d(TAG, "📍 CURRENT POSITION: No velocity data, showing current position")
                     }
                 } else {
-                    // Clear overlay if we don't have enough reliable detection data
-                    updatePredictionOverlay(emptyList())
-                    Log.d(TAG, "Insufficient ball detection data (history: ${ballHistory.size}, pixels: $maxBallPixels)")
+                    // Show current position even with insufficient data (for debugging)
+                    val currentPredictions = listOf(PredictionPoint(bestX, bestY, 0f))
+                    updatePredictionOverlay(currentPredictions)
+                    Log.d(TAG, "📍 INSUFFICIENT DATA: History: ${ballHistory.size}, Pixels: $maxBallPixels, showing current position")
                 }
                 
                 FrameResult(
@@ -494,12 +521,15 @@ class ScreenCaptureService : Service() {
         // Method 1: Orange/Red balls (classic Rocket League)
         val isOrangeRed = red > 150 && green > 50 && green < 200 && blue < 100
         
-        // Method 2: Gray/Silver balls (enhanced for complex lighting)
+        // Method 2: Gray/Silver balls (enhanced for complex lighting, more specific)
         val brightness = (red + green + blue) / 3
         val colorVariance = Math.max(Math.max(Math.abs(red - green), Math.abs(green - blue)), Math.abs(red - blue))
-        val isGraySilver = brightness in 80..220 && 
-                          colorVariance < 50 && // More flexible color variance
-                          red in 70..200 && green in 70..200 && blue in 70..200 // Broader range
+        // More specific detection to avoid field elements
+        val isGraySilver = brightness in 100..180 && 
+                          colorVariance < 35 && // Tighter variance for more specificity
+                          red in 90..170 && green in 90..170 && blue in 90..170 && // Tighter range
+                          // Additional check: avoid very dark or very bright pixels
+                          brightness > 95 && brightness < 185
         
         // Method 3: White/Bright balls (enhanced)
         val isWhiteBright = brightness > 180 && 
