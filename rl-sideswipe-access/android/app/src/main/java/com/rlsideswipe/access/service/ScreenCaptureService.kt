@@ -188,24 +188,35 @@ class ScreenCaptureService : Service() {
             val rotation = windowManager.defaultDisplay.rotation
             
             // Store screen info for coordinate transformations
-            screenWidth = width
-            screenHeight = height
-            isLandscapeMode = width > height
+            // 🔧 FIX: Force landscape mode for Rocket League (game is always landscape)
+            // The display metrics might return portrait dimensions due to Android quirks
+            if (width < height) {
+                // Swap dimensions if detected as portrait (likely wrong for RL)
+                screenWidth = height
+                screenHeight = width
+                isLandscapeMode = true
+                Log.w(TAG, "🔄 ORIENTATION FIX: Swapped dimensions ${width}x${height} -> ${screenWidth}x${screenHeight}")
+            } else {
+                screenWidth = width
+                screenHeight = height
+                isLandscapeMode = width > height
+            }
             
             Log.d(TAG, "🖥️ Display: ${width}x${height}, density: $density, rotation: $rotation")
-            Log.d(TAG, "📱 Orientation: ${if (isLandscapeMode) "LANDSCAPE" else "PORTRAIT"}")
+            Log.d(TAG, "📱 Corrected: ${screenWidth}x${screenHeight}")
+            Log.d(TAG, "📱 Orientation: ${if (isLandscapeMode) "LANDSCAPE" else "PORTRAIT"} (forced for RL)")
             
             // Use RGBA_8888 for stability (avoid complex YUV conversion crashes)
             val format = PixelFormat.RGBA_8888
             
             Log.d(TAG, "Creating ImageReader with format: $format")
-            imageReader = ImageReader.newInstance(width, height, format, 2) // Reduced buffer size for stability
+            imageReader = ImageReader.newInstance(screenWidth, screenHeight, format, 2) // Use corrected dimensions
             imageReader?.setOnImageAvailableListener(imageAvailableListener, backgroundHandler)
             
             Log.d(TAG, "Creating VirtualDisplay...")
             virtualDisplay = mediaProjection?.createVirtualDisplay(
                 "ScreenCapture",
-                width, height, density,
+                screenWidth, screenHeight, density, // Use corrected dimensions
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 imageReader?.surface,
                 null, null
@@ -412,6 +423,24 @@ class ScreenCaptureService : Service() {
             val width = bitmap.width
             val height = bitmap.height
             
+            // 🔍 REDUCED LOGGING: Only log coordinate analysis occasionally
+            if (System.currentTimeMillis() % 5000 < 100) { // Log every ~5 seconds
+                Log.d(TAG, "🔍 COORDINATE SPACE ANALYSIS:")
+                Log.d(TAG, "📱 Screen dimensions: ${screenWidth}x${screenHeight}")
+                Log.d(TAG, "🖼️ Bitmap dimensions: ${width}x${height}")
+                Log.d(TAG, "📊 Dimension ratio: ${width.toFloat()/screenWidth} x ${height.toFloat()/screenHeight}")
+                Log.d(TAG, "🎯 Landscape mode: $isLandscapeMode")
+                
+                // Check if there's a dimension mismatch that could explain coordinate issues
+                val widthRatio = width.toFloat() / screenWidth
+                val heightRatio = height.toFloat() / screenHeight
+                if (abs(widthRatio - 1.0f) > 0.01f || abs(heightRatio - 1.0f) > 0.01f) {
+                    Log.w(TAG, "⚠️ COORDINATE MISMATCH DETECTED!")
+                    Log.w(TAG, "⚠️ Bitmap size (${width}x${height}) != Screen size (${screenWidth}x${screenHeight})")
+                    Log.w(TAG, "⚠️ This could explain coordinate transformation issues!")
+                }
+            }
+            
             // Adjust search area based on orientation - EXPANDED for better coverage
             val (searchStartX, searchEndX, searchStartY, searchEndY) = if (isLandscapeMode) {
                 // In landscape: search almost entire screen, only skip extreme edges
@@ -434,9 +463,17 @@ class ScreenCaptureService : Service() {
             // Detect circular objects (balls) using shape analysis
             val detectedCircles = detectCircularObjects(bitmap, searchStartX, searchEndX, searchStartY, searchEndY)
             
-            if (detectedCircles.isNotEmpty()) {
+            // 🔍 FALLBACK: If no circles found, try a simple brightness-based detection
+            val finalCircles = if (detectedCircles.isEmpty()) {
+                Log.d(TAG, "🔄 No circles found, trying fallback detection...")
+                detectBrightestCircularAreas(bitmap, searchStartX, searchEndX, searchStartY, searchEndY)
+            } else {
+                detectedCircles
+            }
+            
+            if (finalCircles.isNotEmpty()) {
                 // Find the best ball candidate based on size, position, and circularity
-                val bestBall = findBestBallCandidate(detectedCircles, width, height)
+                val bestBall = findBestBallCandidate(finalCircles, width, height)
                 
                 if (bestBall != null) {
                     val bestX = bestBall.x
@@ -447,6 +484,17 @@ class ScreenCaptureService : Service() {
                     Log.d(TAG, "🖼️ Image dimensions: ${width}x${height}")
                     Log.d(TAG, "📊 Ball position relative to image: X=${"%.1f".format(bestX/width*100)}%, Y=${"%.1f".format(bestY/height*100)}%")
                     Log.d(TAG, "🔍 Search area used: ($searchStartX, $searchStartY) to ($searchEndX, $searchEndY)")
+                    
+                    // 🔍 CRITICAL: Show coordinate transformation details
+                    val normalizedX = bestX / width
+                    val normalizedY = bestY / height
+                    val screenX = normalizedX * screenWidth
+                    val screenY = normalizedY * screenHeight
+                    Log.d(TAG, "🔄 COORDINATE TRANSFORMATION:")
+                    Log.d(TAG, "🔄 Bitmap coords: ($bestX, $bestY)")
+                    Log.d(TAG, "🔄 Normalized: (${"%.3f".format(normalizedX)}, ${"%.3f".format(normalizedY)})")
+                    Log.d(TAG, "🔄 Screen coords: (${"%.1f".format(screenX)}, ${"%.1f".format(screenY)})")
+                    Log.d(TAG, "🔄 Expected overlay position: (${"%.1f".format(screenX)}, ${"%.1f".format(screenY)})")
                     
                     // Add to ball tracking history
                     val currentTime = System.currentTimeMillis()
@@ -532,11 +580,11 @@ class ScreenCaptureService : Service() {
                     for (testRadius in minRadius..maxRadius step 4) { // Smaller radius steps
                         val circleScore = analyzeCircularPattern(bitmap, centerX, centerY, testRadius)
                         
-                        if (circleScore > 0.2f) { // LOWERED circularity threshold
+                        if (circleScore > 0.1f) { // VERY LOW circularity threshold for debugging
                             val edgeStrength = calculateEdgeStrength(bitmap, centerX, centerY, testRadius)
                             val confidence = (circleScore * 0.7f + edgeStrength * 0.3f).coerceAtMost(1f)
                             
-                            if (confidence > 0.25f) { // LOWERED confidence threshold
+                            if (confidence > 0.15f) { // VERY LOW confidence threshold for debugging
                                 circles.add(CircleCandidate(
                                     x = centerX.toFloat(),
                                     y = centerY.toFloat(),
@@ -564,6 +612,67 @@ class ScreenCaptureService : Service() {
             
         } catch (e: Exception) {
             Log.e(TAG, "Error in circle detection", e)
+        }
+        
+        return circles
+    }
+    
+    // Fallback detection: Find brightest circular areas (simple approach)
+    private fun detectBrightestCircularAreas(bitmap: Bitmap, startX: Int, endX: Int, startY: Int, endY: Int): List<CircleCandidate> {
+        val circles = mutableListOf<CircleCandidate>()
+        
+        try {
+            val searchStep = 12 // Larger step for faster fallback
+            val testRadii = listOf(20, 30, 40, 50, 60, 80, 100) // Common ball sizes
+            
+            Log.d(TAG, "🔄 Fallback detection: Looking for bright circular areas...")
+            
+            for (centerY in startY until endY step searchStep) {
+                for (centerX in startX until endX step searchStep) {
+                    for (testRadius in testRadii) {
+                        if (isValidPixel(bitmap, centerX - testRadius, centerY - testRadius) &&
+                            isValidPixel(bitmap, centerX + testRadius, centerY + testRadius)) {
+                            
+                            // Simple brightness check in circular area
+                            var totalBrightness = 0f
+                            var pixelCount = 0
+                            
+                            // Sample pixels in a circular pattern
+                            for (i in 0 until 8) {
+                                val angle = (i * 2 * Math.PI / 8)
+                                val x = (centerX + testRadius * 0.7 * cos(angle)).toInt()
+                                val y = (centerY + testRadius * 0.7 * sin(angle)).toInt()
+                                
+                                if (isValidPixel(bitmap, x, y)) {
+                                    totalBrightness += getPixelBrightness(bitmap.getPixel(x, y))
+                                    pixelCount++
+                                }
+                            }
+                            
+                            if (pixelCount > 0) {
+                                val avgBrightness = totalBrightness / pixelCount
+                                // Look for moderately bright areas (ball is grayish)
+                                if (avgBrightness > 80 && avgBrightness < 200) {
+                                    circles.add(CircleCandidate(
+                                        x = centerX.toFloat(),
+                                        y = centerY.toFloat(),
+                                        radius = testRadius.toFloat(),
+                                        confidence = (avgBrightness / 255f) * 0.5f, // Lower confidence for fallback
+                                        edgeStrength = 0.3f
+                                    ))
+                                    
+                                    Log.d(TAG, "🔄 Fallback candidate: ($centerX,$centerY) r=$testRadius, brightness=${"%.1f".format(avgBrightness)}")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            Log.d(TAG, "🔄 Fallback found ${circles.size} candidates")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in fallback detection", e)
         }
         
         return circles
