@@ -327,6 +327,9 @@ class ScreenCaptureService : Service() {
                         if (trajectory != null) {
                             trajectoryPoints.value = trajectory
                         }
+                        
+                        // Update notification to show ball detection is working
+                        updateNotificationWithBallDetection(ballDetection.ball)
                     }
                 }
                 bitmap.recycle()
@@ -454,6 +457,34 @@ class ScreenCaptureService : Service() {
         
         // Detect orange/red colors (typical ball colors in Rocket League)
         return red > 150 && green > 50 && green < 200 && blue < 100
+    }
+    
+    private var lastBallDetectionTime = 0L
+    private var ballDetectionCount = 0
+    
+    private fun updateNotificationWithBallDetection(ball: Detection?) {
+        ball?.let {
+            val currentTime = System.currentTimeMillis()
+            ballDetectionCount++
+            
+            // Update notification every 2 seconds to show ball detection is working
+            if (currentTime - lastBallDetectionTime > 2000) {
+                lastBallDetectionTime = currentTime
+                
+                val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+                    .setContentTitle("RL Sideswipe Access - BALL DETECTED!")
+                    .setContentText("🎯 Ball found at (${(it.cx * 100).toInt()}%, ${(it.cy * 100).toInt()}%) - Confidence: ${(it.conf * 100).toInt()}% - Count: $ballDetectionCount")
+                    .setSmallIcon(R.drawable.ic_notification)
+                    .setOngoing(true)
+                    .setPriority(NotificationCompat.PRIORITY_LOW)
+                    .build()
+                
+                val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                notificationManager.notify(NOTIFICATION_ID, notification)
+                
+                Log.i(TAG, "🎯 BALL DETECTION WORKING! Position: (${(it.cx * 100).toInt()}%, ${(it.cy * 100).toInt()}%), Confidence: ${(it.conf * 100).toInt()}%, Total detections: $ballDetectionCount")
+            }
+        }
     }
     
     private fun logPerformanceMetrics(currentTime: Long) {
