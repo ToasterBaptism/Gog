@@ -344,6 +344,7 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
                 Log.d("NativeControl", "MediaProjectionManager available, creating screen capture intent...")
                 
                 activity.requestMediaProjection { captureIntent ->
+                    Log.d("NativeControl", "MediaProjection callback invoked with intent: $captureIntent")
                     try {
                         if (captureIntent != null) {
                             Log.d("NativeControl", "MediaProjection permission granted, starting service...")

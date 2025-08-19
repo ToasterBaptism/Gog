@@ -54,7 +54,6 @@ class MainActivity : ReactActivity() {
 
     fun requestMediaProjection(callback: (Intent?) -> Unit) {
         Log.d("MainActivity", "Requesting MediaProjection permission...")
-        pendingMediaProjectionResult = callback
         
         try {
             val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as? MediaProjectionManager
@@ -74,25 +73,29 @@ class MainActivity : ReactActivity() {
             val timeoutRunnable = Runnable {
                 if (pendingMediaProjectionResult != null) {
                     Log.w("MainActivity", "MediaProjection dialog timeout - no response after 30 seconds")
-                    val callback = pendingMediaProjectionResult
+                    val pendingCallback = pendingMediaProjectionResult
                     pendingMediaProjectionResult = null
-                    callback?.invoke(null)
+                    pendingCallback?.invoke(null)
                 }
             }
+            
+            // Set up the callback with timeout cancellation
+            pendingMediaProjectionResult = { result ->
+                Log.d("MainActivity", "MediaProjection callback invoked with result: $result")
+                timeoutHandler.removeCallbacks(timeoutRunnable)
+                callback(result)
+            }
+            
+            // Start timeout after setting up callback
             timeoutHandler.postDelayed(timeoutRunnable, 30000) // 30 second timeout
             
             Log.d("MainActivity", "Launching MediaProjection intent...")
             mediaProjectionLauncher.launch(captureIntent)
-            
-            // Cancel timeout if we get a response
-            val originalCallback = callback
-            pendingMediaProjectionResult = { result ->
-                timeoutHandler.removeCallbacks(timeoutRunnable)
-                originalCallback(result)
-            }
+            Log.d("MainActivity", "MediaProjection intent launched successfully")
             
         } catch (e: Exception) {
             Log.e("MainActivity", "Exception in requestMediaProjection", e)
+            pendingMediaProjectionResult = null
             callback(null)
         }
     }

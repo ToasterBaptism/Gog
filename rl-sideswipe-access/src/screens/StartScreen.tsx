@@ -72,20 +72,31 @@ const StartScreen: React.FC = () => {
   };
 
   const handleStartStop = async () => {
+    console.log('handleStartStop called, isActive:', isActive);
+    console.log('serviceEnabled:', serviceEnabled, 'permissionsGranted:', permissionsGranted);
+    
     if (!serviceEnabled || !permissionsGranted) {
+      console.log('Permissions not ready, showing overlay');
       setShowPermissionOverlay(true);
       return;
     }
 
     try {
       if (isActive) {
+        console.log('Stopping service...');
         setStatusText('Stopping...');
         await NativeControl.stop();
         setIsActive(false);
         setStatusText('Ready to start');
+        console.log('Service stopped successfully');
       } else {
+        console.log('Starting service...');
         setStatusText('Requesting screen capture...');
+        
+        console.log('Calling NativeControl.start()...');
         await NativeControl.start();
+        console.log('NativeControl.start() completed successfully');
+        
         setIsActive(true);
         setStatusText('Capturing...');
         
@@ -112,6 +123,7 @@ const StartScreen: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Failed to start/stop service:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
       setIsActive(false);
       setStatusText('Error occurred');
       
