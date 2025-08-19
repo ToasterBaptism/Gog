@@ -388,36 +388,36 @@ class ScreenCaptureService : Service() {
     
     private fun detectBallSimple(bitmap: Bitmap): FrameResult? {
         return try {
-            // Simple color-based ball detection for orange/red ball
+            // Enhanced color-based ball detection for multiple ball colors
             val width = bitmap.width
             val height = bitmap.height
             
-            // Sample pixels to find orange/red circular objects
+            // Sample pixels to find ball-colored circular objects
             var bestX = -1f
             var bestY = -1f
-            var maxOrangePixels = 0
+            var maxBallPixels = 0
             
-            // Grid search for orange regions
+            // Grid search for ball-colored regions
             val gridSize = 50
             for (y in 0 until height step gridSize) {
                 for (x in 0 until width step gridSize) {
-                    val orangeCount = countOrangePixelsInRegion(bitmap, x, y, gridSize)
-                    if (orangeCount > maxOrangePixels) {
-                        maxOrangePixels = orangeCount
+                    val ballPixelCount = countBallPixelsInRegion(bitmap, x, y, gridSize)
+                    if (ballPixelCount > maxBallPixels) {
+                        maxBallPixels = ballPixelCount
                         bestX = x.toFloat() + gridSize / 2f
                         bestY = y.toFloat() + gridSize / 2f
                     }
                 }
             }
             
-            if (maxOrangePixels > 10) { // Found potential ball
-                Log.d(TAG, "Ball detected at ($bestX, $bestY) with $maxOrangePixels orange pixels")
+            if (maxBallPixels > 10) { // Found potential ball
+                Log.d(TAG, "Ball detected at ($bestX, $bestY) with $maxBallPixels ball-colored pixels")
                 FrameResult(
                     ball = Detection(
                         cx = bestX / width, // Normalize to 0-1
                         cy = bestY / height,
                         r = 0.05f, // Estimated radius
-                        conf = (maxOrangePixels / 100f).coerceAtMost(1f)
+                        conf = (maxBallPixels / 100f).coerceAtMost(1f)
                     ),
                     timestampNanos = System.nanoTime()
                 )
@@ -430,7 +430,7 @@ class ScreenCaptureService : Service() {
         }
     }
     
-    private fun countOrangePixelsInRegion(bitmap: Bitmap, startX: Int, startY: Int, size: Int): Int {
+    private fun countBallPixelsInRegion(bitmap: Bitmap, startX: Int, startY: Int, size: Int): Int {
         return try {
             var count = 0
             val endX = (startX + size).coerceAtMost(bitmap.width)
@@ -439,7 +439,7 @@ class ScreenCaptureService : Service() {
             for (y in startY until endY step 5) { // Sample every 5 pixels for performance
                 for (x in startX until endX step 5) {
                     val pixel = bitmap.getPixel(x, y)
-                    if (isOrangeOrRed(pixel)) {
+                    if (isBallColor(pixel)) {
                         count++
                     }
                 }
@@ -450,13 +450,26 @@ class ScreenCaptureService : Service() {
         }
     }
     
-    private fun isOrangeOrRed(pixel: Int): Boolean {
+    private fun isBallColor(pixel: Int): Boolean {
         val red = (pixel shr 16) and 0xFF
         val green = (pixel shr 8) and 0xFF
         val blue = pixel and 0xFF
         
-        // Detect orange/red colors (typical ball colors in Rocket League)
-        return red > 150 && green > 50 && green < 200 && blue < 100
+        // Method 1: Orange/Red balls (classic Rocket League)
+        val isOrangeRed = red > 150 && green > 50 && green < 200 && blue < 100
+        
+        // Method 2: Gray/Silver balls (like in your screenshot)
+        val isGraySilver = red > 120 && green > 120 && blue > 120 && 
+                          red < 200 && green < 200 && blue < 200 &&
+                          Math.abs(red - green) < 30 && Math.abs(red - blue) < 30 && Math.abs(green - blue) < 30
+        
+        // Method 3: White/Bright balls
+        val isWhiteBright = red > 200 && green > 200 && blue > 200
+        
+        // Method 4: Yellow/Golden balls
+        val isYellowGold = red > 180 && green > 150 && blue < 120 && red > green && green > blue
+        
+        return isOrangeRed || isGraySilver || isWhiteBright || isYellowGold
     }
     
     private var lastBallDetectionTime = 0L
