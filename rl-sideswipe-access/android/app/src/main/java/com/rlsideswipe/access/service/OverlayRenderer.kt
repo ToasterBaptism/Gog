@@ -51,12 +51,12 @@ class OverlayRenderer @JvmOverloads constructor(
         isAntiAlias = true
     }
     
-    fun updateBall(ball: Detection?) {
+    fun setDetection(ball: Detection?) {
         currentBall = ball
         invalidate()
     }
     
-    fun updateTrajectory(trajectory: List<TrajectoryPoint>) {
+    fun setTrajectory(trajectory: List<TrajectoryPoint>) {
         currentTrajectory = trajectory
         invalidate()
     }
