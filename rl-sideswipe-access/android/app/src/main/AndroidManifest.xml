@@ -47,5 +47,9 @@
             android:name=".service.ScreenCaptureService"
             android:foregroundServiceType="mediaProjection"
             android:exported="false" />
+            
+        <service
+            android:name=".service.PredictionOverlayService"
+            android:exported="false" />
     </application>
 </manifest>

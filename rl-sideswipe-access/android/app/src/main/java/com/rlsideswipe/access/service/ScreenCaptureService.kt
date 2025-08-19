@@ -72,6 +72,7 @@ class ScreenCaptureService : Service() {
         createNotificationChannel()
         setupBackgroundThread()
         lastPerformanceLog = System.currentTimeMillis()
+        startPredictionOverlay()
         Log.d(TAG, "ScreenCaptureService created")
     }
     
@@ -412,6 +413,20 @@ class ScreenCaptureService : Service() {
             
             if (maxBallPixels > 10) { // Found potential ball
                 Log.d(TAG, "Ball detected at ($bestX, $bestY) with $maxBallPixels ball-colored pixels")
+                
+                // Add to ball tracking history
+                val currentTime = System.currentTimeMillis()
+                addBallToHistory(bestX, bestY, currentTime)
+                
+                // Calculate velocity and predict trajectory
+                calculateBallVelocity()?.let { (velX, velY) ->
+                    val predictions = predictBallTrajectory(bestX, bestY, velX, velY)
+                    if (predictions.isNotEmpty()) {
+                        updatePredictionOverlay(predictions)
+                        Log.d(TAG, "Ball trajectory predicted: ${predictions.size} points, velocity: ($velX, $velY)")
+                    }
+                }
+                
                 FrameResult(
                     ball = Detection(
                         cx = bestX / width, // Normalize to 0-1
@@ -422,6 +437,8 @@ class ScreenCaptureService : Service() {
                     timestampNanos = System.nanoTime()
                 )
             } else {
+                // Clear prediction overlay when no ball detected
+                updatePredictionOverlay(emptyList())
                 null
             }
         } catch (e: Exception) {
@@ -475,6 +492,149 @@ class ScreenCaptureService : Service() {
     private var lastBallDetectionTime = 0L
     private var ballDetectionCount = 0
     
+    // Ball tracking for prediction
+    private data class BallPosition(
+        val x: Float,
+        val y: Float,
+        val timestamp: Long
+    )
+    
+    private val ballHistory = mutableListOf<BallPosition>()
+    private val maxHistorySize = 10 // Keep last 10 positions for velocity calculation
+    
+    // Prediction overlay
+    private var predictionOverlayService: Intent? = null
+    
+    private fun addBallToHistory(x: Float, y: Float, timestamp: Long) {
+        ballHistory.add(BallPosition(x, y, timestamp))
+        
+        // Keep only recent positions
+        while (ballHistory.size > maxHistorySize) {
+            ballHistory.removeAt(0)
+        }
+        
+        // Remove old positions (older than 2 seconds)
+        val cutoffTime = timestamp - 2000
+        ballHistory.removeAll { it.timestamp < cutoffTime }
+    }
+    
+    private fun calculateBallVelocity(): Pair<Float, Float>? {
+        if (ballHistory.size < 2) return null
+        
+        // Use linear regression to get better velocity estimate
+        val recent = ballHistory.takeLast(5) // Use last 5 positions
+        if (recent.size < 2) return null
+        
+        val first = recent.first()
+        val last = recent.last()
+        val timeDiff = (last.timestamp - first.timestamp) / 1000f // Convert to seconds
+        
+        if (timeDiff <= 0) return null
+        
+        val velocityX = (last.x - first.x) / timeDiff // pixels per second
+        val velocityY = (last.y - first.y) / timeDiff // pixels per second
+        
+        return Pair(velocityX, velocityY)
+    }
+    
+    private data class PredictionPoint(
+        val x: Float,
+        val y: Float,
+        val time: Float
+    )
+    
+    private fun predictBallTrajectory(startX: Float, startY: Float, velocityX: Float, velocityY: Float): List<PredictionPoint> {
+        val predictions = mutableListOf<PredictionPoint>()
+        val screenWidth = resources.displayMetrics.widthPixels.toFloat()
+        val screenHeight = resources.displayMetrics.heightPixels.toFloat()
+        
+        // Physics constants for Rocket League Sideswipe
+        val gravity = 800f // pixels per second squared (adjusted for mobile screen)
+        val bounceDamping = 0.7f // Energy loss on bounce
+        val timeStep = 0.05f // 50ms steps
+        val maxPredictionTime = 3f // Predict up to 3 seconds ahead
+        
+        var currentX = startX
+        var currentY = startY
+        var currentVelX = velocityX
+        var currentVelY = velocityY
+        var time = 0f
+        
+        // Game field boundaries (approximate for Rocket League Sideswipe)
+        val fieldLeft = screenWidth * 0.1f
+        val fieldRight = screenWidth * 0.9f
+        val fieldTop = screenHeight * 0.2f
+        val fieldBottom = screenHeight * 0.8f
+        
+        while (time < maxPredictionTime && predictions.size < 60) { // Max 60 points
+            time += timeStep
+            
+            // Apply gravity
+            currentVelY += gravity * timeStep
+            
+            // Update position
+            currentX += currentVelX * timeStep
+            currentY += currentVelY * timeStep
+            
+            // Bounce off walls
+            if (currentX <= fieldLeft || currentX >= fieldRight) {
+                currentVelX = -currentVelX * bounceDamping
+                currentX = if (currentX <= fieldLeft) fieldLeft else fieldRight
+            }
+            
+            // Bounce off floor/ceiling
+            if (currentY <= fieldTop || currentY >= fieldBottom) {
+                currentVelY = -currentVelY * bounceDamping
+                currentY = if (currentY <= fieldTop) fieldTop else fieldBottom
+            }
+            
+            predictions.add(PredictionPoint(currentX, currentY, time))
+            
+            // Stop if ball is moving very slowly
+            val speed = kotlin.math.sqrt(currentVelX * currentVelX + currentVelY * currentVelY)
+            if (speed < 50f) break // Less than 50 pixels per second
+        }
+        
+        return predictions
+    }
+    
+    private fun startPredictionOverlay() {
+        try {
+            predictionOverlayService = Intent(this, PredictionOverlayService::class.java)
+            startService(predictionOverlayService)
+            Log.d(TAG, "Prediction overlay service started")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting prediction overlay", e)
+        }
+    }
+    
+    private fun stopPredictionOverlay() {
+        try {
+            predictionOverlayService?.let { intent ->
+                stopService(intent)
+                predictionOverlayService = null
+                Log.d(TAG, "Prediction overlay service stopped")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping prediction overlay", e)
+        }
+    }
+    
+    private fun updatePredictionOverlay(predictions: List<PredictionPoint>) {
+        try {
+            // Convert to overlay service format
+            val overlayPredictions = predictions.map { 
+                PredictionOverlayService.PredictionPoint(it.x, it.y, it.time) 
+            }
+            
+            // Send update directly to overlay service
+            PredictionOverlayService.updatePredictions(overlayPredictions)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating prediction overlay", e)
+        }
+    }
+    
     private fun updateNotificationWithBallDetection(ball: Detection?) {
         ball?.let {
             val currentTime = System.currentTimeMillis()
@@ -517,6 +677,7 @@ class ScreenCaptureService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         stopCapture()
+        stopPredictionOverlay()
         
         backgroundHandler?.post {
             inferenceEngine?.close()
