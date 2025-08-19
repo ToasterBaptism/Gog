@@ -61,14 +61,33 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
     
     init {
         try {
+            Log.d(TAG, "Initializing TFLiteInferenceEngine...")
             loadModel()
             initializeBuffers()
             createHanningWindow()
             Log.d(TAG, "TFLiteInferenceEngine initialized successfully")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize TFLiteInferenceEngine", e)
-            throw e // Re-throw to trigger fallback to StubInferenceEngine
+            Log.e(TAG, "Failed to initialize TFLiteInferenceEngine: ${e.message}", e)
+            // Clean up any partially initialized resources
+            cleanup()
+            throw RuntimeException("TensorFlow Lite initialization failed: ${e.message}", e)
         }
+    }
+    
+    private fun cleanup() {
+        try {
+            interpreter?.close()
+            gpuDelegate?.close()
+            nnApiDelegate?.close()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error during cleanup", e)
+        }
+        interpreter = null
+        gpuDelegate = null
+        nnApiDelegate = null
+        inputBuffer = null
+        outputBuffer = null
+        hanningWindow = null
     }
     
     private fun loadModel() {

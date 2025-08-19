@@ -204,30 +204,33 @@ class ScreenCaptureService : Service() {
             try {
                 Log.d(TAG, "Initializing AI components...")
                 
-                // Initialize inference engine with error handling
-                try {
-                    inferenceEngine = TFLiteInferenceEngine(this@ScreenCaptureService)
-                    Log.d(TAG, "TensorFlow Lite inference engine created")
+                // Initialize inference engine with comprehensive error handling
+                inferenceEngine = try {
+                    Log.d(TAG, "Attempting to create TensorFlow Lite inference engine...")
+                    val engine = TFLiteInferenceEngine(this@ScreenCaptureService)
+                    Log.i(TAG, "TensorFlow Lite inference engine created successfully")
+                    engine
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to create TensorFlow Lite engine, using stub", e)
-                    inferenceEngine = StubInferenceEngine()
+                    Log.w(TAG, "TensorFlow Lite engine failed, falling back to stub: ${e.message}", e)
+                    StubInferenceEngine()
                 }
                 
                 // Initialize trajectory predictor
-                try {
-                    trajectoryPredictor = KalmanTrajectoryPredictor()
-                    Log.d(TAG, "Kalman trajectory predictor created")
+                trajectoryPredictor = try {
+                    val predictor = KalmanTrajectoryPredictor()
+                    Log.d(TAG, "Kalman trajectory predictor created successfully")
+                    predictor
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to create trajectory predictor", e)
-                    trajectoryPredictor = null
+                    Log.e(TAG, "Failed to create trajectory predictor: ${e.message}", e)
+                    null
                 }
                 
                 // Warmup inference engine
                 try {
                     inferenceEngine?.warmup()
-                    Log.d(TAG, "AI components initialized and warmed up successfully")
+                    Log.i(TAG, "AI components initialized and warmed up successfully")
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to warmup inference engine", e)
+                    Log.e(TAG, "Failed to warmup inference engine: ${e.message}", e)
                 }
                 
             } catch (e: Exception) {
