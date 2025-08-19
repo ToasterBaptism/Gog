@@ -441,20 +441,20 @@ class ScreenCaptureService : Service() {
                 }
             }
             
-            // Adjust search area based on orientation - EXPANDED for better coverage
+            // Adjust search area based on orientation - FOCUSED on center for performance
             val (searchStartX, searchEndX, searchStartY, searchEndY) = if (isLandscapeMode) {
-                // In landscape: search almost entire screen, only skip extreme edges
-                val searchStartX = (width * 0.05).toInt() // Skip left 5% (minimal UI)
-                val searchEndX = (width * 0.95).toInt() // Skip right 5% (minimal UI)
-                val searchStartY = (height * 0.05).toInt() // Skip top 5%
-                val searchEndY = (height * 0.95).toInt() // Skip bottom 5%
+                // In landscape: focus on center area where ball is most likely
+                val searchStartX = (width * 0.15).toInt() // Skip left 15% - focus on center
+                val searchEndX = (width * 0.85).toInt() // Skip right 15% - focus on center
+                val searchStartY = (height * 0.15).toInt() // Skip top 15%
+                val searchEndY = (height * 0.85).toInt() // Skip bottom 15%
                 Tuple4(searchStartX, searchEndX, searchStartY, searchEndY)
             } else {
-                // In portrait: search wider area
-                val searchStartX = (width * 0.05).toInt() // Skip left 5%
-                val searchEndX = (width * 0.95).toInt() // Skip right 5%
-                val searchStartY = (height * 0.05).toInt() // Skip top 5%
-                val searchEndY = (height * 0.85).toInt() // Search upper 85% of screen
+                // In portrait: search central area
+                val searchStartX = (width * 0.15).toInt() // Skip left 15%
+                val searchEndX = (width * 0.85).toInt() // Skip right 15%
+                val searchStartY = (height * 0.15).toInt() // Skip top 15%
+                val searchEndY = (height * 0.75).toInt() // Search upper 75% of screen
                 Tuple4(searchStartX, searchEndX, searchStartY, searchEndY)
             }
             
@@ -463,12 +463,11 @@ class ScreenCaptureService : Service() {
             // Detect circular objects (balls) using shape analysis
             val detectedCircles = detectCircularObjects(bitmap, searchStartX, searchEndX, searchStartY, searchEndY)
             
-            // 🔍 FALLBACK: If no circles found, try a simple brightness-based detection
-            val finalCircles = if (detectedCircles.isEmpty()) {
-                Log.d(TAG, "🔄 No circles found, trying fallback detection...")
-                detectBrightestCircularAreas(bitmap, searchStartX, searchEndX, searchStartY, searchEndY)
-            } else {
-                detectedCircles
+            // 🔍 DISABLED FALLBACK: Too many false positives, focus on main detection
+            val finalCircles = detectedCircles
+            
+            if (detectedCircles.isEmpty()) {
+                Log.d(TAG, "🔄 No circles found with current thresholds")
             }
             
             if (finalCircles.isNotEmpty()) {
@@ -566,10 +565,10 @@ class ScreenCaptureService : Service() {
         val circles = mutableListOf<CircleCandidate>()
         
         try {
-            // Expected ball size range (in pixels) - EXPANDED for larger balls
-            val minRadius = 10
-            val maxRadius = 150 // Increased to handle larger balls
-            val searchStep = 6 // Reduced step for better coverage
+            // Expected ball size range (in pixels) - FOCUSED for performance
+            val minRadius = 30 // Increased minimum - ball is large
+            val maxRadius = 100 // Reasonable maximum for performance
+            val searchStep = 12 // Increased step for much better performance
             
             Log.d(TAG, "🔍 Searching for circles in area ($startX,$startY) to ($endX,$endY)")
             
@@ -580,11 +579,11 @@ class ScreenCaptureService : Service() {
                     for (testRadius in minRadius..maxRadius step 4) { // Smaller radius steps
                         val circleScore = analyzeCircularPattern(bitmap, centerX, centerY, testRadius)
                         
-                        if (circleScore > 0.1f) { // VERY LOW circularity threshold for debugging
+                        if (circleScore > 0.4f) { // MUCH HIGHER circularity threshold for selectivity
                             val edgeStrength = calculateEdgeStrength(bitmap, centerX, centerY, testRadius)
                             val confidence = (circleScore * 0.7f + edgeStrength * 0.3f).coerceAtMost(1f)
                             
-                            if (confidence > 0.15f) { // VERY LOW confidence threshold for debugging
+                            if (confidence > 0.6f) { // MUCH HIGHER confidence threshold for selectivity
                                 circles.add(CircleCandidate(
                                     x = centerX.toFloat(),
                                     y = centerY.toFloat(),
