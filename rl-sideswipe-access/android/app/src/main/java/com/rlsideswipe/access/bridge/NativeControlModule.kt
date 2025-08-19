@@ -616,22 +616,10 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
             }
             results["batteryOptimizationIgnored"] = batteryOptimized
             
-            // Overall readiness
-            val installTimePermissions = listOf(
-                Manifest.permission.VIBRATE,
-                Manifest.permission.WAKE_LOCK,
-                Manifest.permission.FOREGROUND_SERVICE,
-                Manifest.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION
-            )
-            var installPermissionsOk = true
-            for (permission in installTimePermissions) {
-                if (ContextCompat.checkSelfPermission(reactApplicationContext, permission) 
-                    != PackageManager.PERMISSION_GRANTED) {
-                    installPermissionsOk = false
-                    break
-                }
-            }
-            val allReady = accessibilityEnabled && overlayEnabled && missingRuntimePermissions.isEmpty() && batteryOptimized && installPermissionsOk
+            // Overall readiness - only check critical permissions
+            // Install-time permissions are automatically granted if in manifest, so we don't need to check them
+            // Focus only on the permissions that actually matter for functionality
+            val allReady = accessibilityEnabled && overlayEnabled && missingRuntimePermissions.isEmpty() && batteryOptimized
             results["allPermissionsReady"] = allReady
             
             Log.d("NativeControl", "Permission check results: $results")

@@ -84,29 +84,10 @@ const StartScreen: React.FC = () => {
 
   const [isBusy, setIsBusy] = useState(false);
   const handleStartStop = async () => {
-    // IMMEDIATE DEBUG: Show alert to confirm button press is working
-    Alert.alert('DEBUG', 'Start button was pressed! This confirms the button is working.');
-    
-    if (isBusy) {
-      Alert.alert('DEBUG', 'Button is busy, returning early');
-      return;
-    }
+    if (isBusy) return;
     setIsBusy(true);
     console.log('handleStartStop called, isActive:', isActive);
     console.log('serviceEnabled:', serviceEnabled, 'permissionsGranted:', permissionsGranted);
-    
-    // Test if native module is available
-    try {
-      console.log('Testing native module availability...');
-      const testResult = await NativeControl.isServiceEnabled();
-      console.log('Native module test result:', testResult);
-      Alert.alert('DEBUG', `Native module is working! Test result: ${testResult}`);
-    } catch (e) {
-      console.error('Native module test failed:', e);
-      Alert.alert('DEBUG ERROR', `Native module failed: ${e.message}`);
-      setIsBusy(false);
-      return;
-    }
     
     if (!isActive) {
       // Before starting, do a comprehensive permission check
@@ -140,6 +121,7 @@ const StartScreen: React.FC = () => {
               { text: 'Setup', onPress: () => setShowPermissionOverlay(true) }
             ]
           );
+          setIsBusy(false);
           return;
         }
       } catch (e) {
@@ -148,6 +130,7 @@ const StartScreen: React.FC = () => {
         if (!serviceEnabled || !permissionsGranted) {
           console.log('Permissions not ready (fallback check), showing overlay');
           setShowPermissionOverlay(true);
+          setIsBusy(false);
           return;
         }
       }
