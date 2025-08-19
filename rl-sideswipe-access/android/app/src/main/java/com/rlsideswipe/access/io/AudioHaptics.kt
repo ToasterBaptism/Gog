@@ -2,6 +2,7 @@ package com.rlsideswipe.access.io
 
 import android.content.Context
 import android.media.SoundPool
+import android.media.AudioAttributes
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -23,6 +24,7 @@ class AudioHaptics(private val context: Context) {
     
     private var approachSoundId = 0
     private var bounceSoundId = 0
+    private var soundsLoaded = false
     
     private var lastApproachTime = 0L
     private var audioEnabled = true
@@ -35,11 +37,25 @@ class AudioHaptics(private val context: Context) {
     
     private fun initializeAudio() {
         try {
+            val attrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
             soundPool = SoundPool.Builder()
                 .setMaxStreams(MAX_STREAMS)
+                .setAudioAttributes(attrs)
                 .build()
             
             soundPool?.let { pool ->
+                pool.setOnLoadCompleteListener { _, sampleId, status ->
+                    if (status == 0) {
+                        if (sampleId == approachSoundId || sampleId == bounceSoundId) {
+                            if (approachSoundId != 0 && bounceSoundId != 0) {
+                                soundsLoaded = true
+                            }
+                        }
+                    }
+                }
                 approachSoundId = pool.load(context, R.raw.approach, 1)
                 bounceSoundId = pool.load(context, R.raw.bounce, 1)
             }
@@ -77,7 +93,11 @@ class AudioHaptics(private val context: Context) {
         lastApproachTime = currentTime
         
         try {
-            soundPool?.play(approachSoundId, 1.0f, 1.0f, 1, 0, 1.0f)
+            if (soundsLoaded && approachSoundId != 0) {
+                soundPool?.play(approachSoundId, 1.0f, 1.0f, 1, 0, 1.0f)
+            } else {
+                Log.w(TAG, "Approach sound not yet loaded")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to play approach sound", e)
         }
@@ -87,7 +107,11 @@ class AudioHaptics(private val context: Context) {
         if (!audioEnabled) return
         
         try {
-            soundPool?.play(bounceSoundId, 1.0f, 1.0f, 1, 0, 1.0f)
+            if (soundsLoaded && bounceSoundId != 0) {
+                soundPool?.play(bounceSoundId, 1.0f, 1.0f, 1, 0, 1.0f)
+            } else {
+                Log.w(TAG, "Bounce sound not yet loaded")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to play bounce sound", e)
         }
