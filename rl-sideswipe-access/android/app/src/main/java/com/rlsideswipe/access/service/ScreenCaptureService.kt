@@ -583,25 +583,49 @@ class ScreenCaptureService : Service() {
         }
     }
     
-    // Create a simple ball template (placeholder - replace with actual ball image)
+    // Create realistic Rocket League ball template based on provided images
     private fun createSimpleBallTemplate(): Bitmap {
-        val size = 60 // Template size
+        val size = 64 // Slightly larger for better detail
         val template = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val centerX = size / 2
-        val centerY = size / 2
-        val radius = size / 3
+        val centerX = size / 2f
+        val centerY = size / 2f
+        val radius = size / 2.2f // Slightly smaller than full size
         
-        // Create a simple gray circle template
+        // Create realistic RL ball template based on your images
         for (y in 0 until size) {
             for (x in 0 until size) {
                 val dx = x - centerX
                 val dy = y - centerY
-                val distance = sqrt((dx * dx + dy * dy).toFloat())
+                val distance = sqrt(dx * dx + dy * dy)
                 
                 if (distance <= radius) {
-                    // Gray metallic ball color
-                    val intensity = (200 - (distance / radius * 50)).toInt().coerceIn(150, 200)
-                    val color = (0xFF shl 24) or (intensity shl 16) or (intensity shl 8) or intensity
+                    // Create geometric pattern like in RL ball
+                    val normalizedX = (x - centerX) / radius
+                    val normalizedY = (y - centerY) / radius
+                    
+                    // Base metallic gray color (from your images)
+                    var baseIntensity = 160
+                    
+                    // Add geometric pattern (hexagonal/diamond shapes)
+                    val patternX = (normalizedX * 4).toInt()
+                    val patternY = (normalizedY * 4).toInt()
+                    if ((patternX + patternY) % 2 == 0) {
+                        baseIntensity += 20 // Lighter areas
+                    } else {
+                        baseIntensity -= 15 // Darker areas
+                    }
+                    
+                    // Add radial shading (darker at edges)
+                    val edgeFactor = 1f - (distance / radius)
+                    baseIntensity = (baseIntensity * (0.7f + 0.3f * edgeFactor)).toInt()
+                    
+                    // Add some blue tint (like in RL)
+                    val intensity = baseIntensity.coerceIn(120, 200)
+                    val red = (intensity * 0.9f).toInt().coerceIn(0, 255)
+                    val green = (intensity * 0.9f).toInt().coerceIn(0, 255)
+                    val blue = (intensity * 1.1f).toInt().coerceIn(0, 255)
+                    
+                    val color = (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
                     template.setPixel(x, y, color)
                 } else {
                     template.setPixel(x, y, 0x00000000) // Transparent
@@ -612,7 +636,7 @@ class ScreenCaptureService : Service() {
         return template
     }
     
-    // Template matching for ball detection
+    // Enhanced template matching for Rocket League ball detection
     private fun detectBallUsingTemplate(bitmap: Bitmap, startX: Int, endX: Int, startY: Int, endY: Int): List<CircleCandidate> {
         val candidates = mutableListOf<CircleCandidate>()
         val template = ballTemplate ?: return candidates
@@ -620,48 +644,68 @@ class ScreenCaptureService : Service() {
         try {
             val templateWidth = template.width
             val templateHeight = template.height
-            val threshold = 0.7f // Template matching threshold
             
-            Log.d(TAG, "🎯 Template matching: ${templateWidth}x${templateHeight} template")
+            Log.d(TAG, "🎯 Enhanced template matching: ${templateWidth}x${templateHeight} template")
             
-            // Search for template matches
-            val searchStep = 8 // Faster search
-            for (y in startY until (endY - templateHeight) step searchStep) {
-                for (x in startX until (endX - templateWidth) step searchStep) {
-                    val similarity = calculateTemplateSimilarity(bitmap, template, x, y)
-                    
-                    if (similarity > threshold) {
-                        val centerX = x + templateWidth / 2
-                        val centerY = y + templateHeight / 2
-                        val radius = templateWidth / 2
+            // Multi-scale template matching for different ball sizes
+            val scales = listOf(0.8f, 1.0f, 1.2f, 1.4f) // Different ball sizes
+            
+            for (scale in scales) {
+                val scaledWidth = (templateWidth * scale).toInt()
+                val scaledHeight = (templateHeight * scale).toInt()
+                
+                if (scaledWidth < 20 || scaledHeight < 20) continue // Too small
+                if (scaledWidth > 120 || scaledHeight > 120) continue // Too large
+                
+                val scaledTemplate = Bitmap.createScaledBitmap(template, scaledWidth, scaledHeight, true)
+                val threshold = 0.65f // Slightly lower threshold for real ball detection
+                
+                // Search for template matches at this scale
+                val searchStep = 6 // More thorough search for accuracy
+                for (y in startY until (endY - scaledHeight) step searchStep) {
+                    for (x in startX until (endX - scaledWidth) step searchStep) {
+                        val similarity = calculateEnhancedSimilarity(bitmap, scaledTemplate, x, y)
                         
-                        candidates.add(CircleCandidate(
-                            x = centerX.toFloat(),
-                            y = centerY.toFloat(),
-                            radius = radius.toFloat(),
-                            confidence = similarity,
-                            edgeStrength = 0.8f // High edge strength for template matches
-                        ))
-                        
-                        Log.d(TAG, "🎯 Template match: ($centerX,$centerY) similarity=${"%.3f".format(similarity)}")
+                        if (similarity > threshold) {
+                            val centerX = x + scaledWidth / 2
+                            val centerY = y + scaledHeight / 2
+                            val radius = scaledWidth / 2
+                            
+                            // Boost confidence for better scale matches
+                            val scaleBonus = if (scale == 1.0f) 0.1f else 0.0f
+                            val finalConfidence = (similarity + scaleBonus).coerceAtMost(1.0f)
+                            
+                            candidates.add(CircleCandidate(
+                                x = centerX.toFloat(),
+                                y = centerY.toFloat(),
+                                radius = radius.toFloat(),
+                                confidence = finalConfidence,
+                                edgeStrength = 0.9f // Very high for template matches
+                            ))
+                            
+                            Log.d(TAG, "🎯 Template match: ($centerX,$centerY) scale=${scale} similarity=${"%.3f".format(similarity)}")
+                        }
                     }
                 }
+                
+                scaledTemplate.recycle() // Clean up memory
             }
             
-            Log.d(TAG, "🎯 Template matching found ${candidates.size} candidates")
+            Log.d(TAG, "🎯 Multi-scale template matching found ${candidates.size} candidates")
             
         } catch (e: Exception) {
-            Log.e(TAG, "Error in template matching", e)
+            Log.e(TAG, "Error in enhanced template matching", e)
         }
         
         return candidates
     }
     
-    // Calculate similarity between template and image region
-    private fun calculateTemplateSimilarity(bitmap: Bitmap, template: Bitmap, startX: Int, startY: Int): Float {
+    // Enhanced similarity calculation for Rocket League ball detection
+    private fun calculateEnhancedSimilarity(bitmap: Bitmap, template: Bitmap, startX: Int, startY: Int): Float {
         val templateWidth = template.width
         val templateHeight = template.height
-        var totalDifference = 0f
+        var colorSimilarity = 0f
+        var textureSimilarity = 0f
         var pixelCount = 0
         
         for (ty in 0 until templateHeight) {
@@ -675,11 +719,33 @@ class ScreenCaptureService : Service() {
                     
                     // Skip transparent template pixels
                     if ((templatePixel ushr 24) > 0) {
-                        val templateGray = getPixelBrightness(templatePixel)
-                        val bitmapGray = getPixelBrightness(bitmapPixel)
+                        // Color similarity (RGB comparison)
+                        val tRed = (templatePixel shr 16) and 0xFF
+                        val tGreen = (templatePixel shr 8) and 0xFF
+                        val tBlue = templatePixel and 0xFF
                         
-                        val difference = abs(templateGray - bitmapGray)
-                        totalDifference += difference
+                        val bRed = (bitmapPixel shr 16) and 0xFF
+                        val bGreen = (bitmapPixel shr 8) and 0xFF
+                        val bBlue = bitmapPixel and 0xFF
+                        
+                        // Check if bitmap pixel is in metallic gray range (like RL ball)
+                        val isMetallicGray = isMetallicGrayColor(bRed, bGreen, bBlue)
+                        val colorBonus = if (isMetallicGray) 0.2f else 0f
+                        
+                        val colorDiff = sqrt(
+                            ((tRed - bRed) * (tRed - bRed) + 
+                             (tGreen - bGreen) * (tGreen - bGreen) + 
+                             (tBlue - bBlue) * (tBlue - bBlue)).toFloat()
+                        ) / 441.67f // Normalize to 0-1 (sqrt(255^2 * 3))
+                        
+                        colorSimilarity += (1f - colorDiff + colorBonus)
+                        
+                        // Texture similarity (brightness patterns)
+                        val templateBrightness = getPixelBrightness(templatePixel)
+                        val bitmapBrightness = getPixelBrightness(bitmapPixel)
+                        val brightnessDiff = abs(templateBrightness - bitmapBrightness) / 255f
+                        
+                        textureSimilarity += (1f - brightnessDiff)
                         pixelCount++
                     }
                 }
@@ -688,10 +754,29 @@ class ScreenCaptureService : Service() {
         
         if (pixelCount == 0) return 0f
         
-        val avgDifference = totalDifference / pixelCount
-        val similarity = 1f - (avgDifference / 255f) // Convert to similarity (0-1)
+        val avgColorSimilarity = colorSimilarity / pixelCount
+        val avgTextureSimilarity = textureSimilarity / pixelCount
         
-        return similarity.coerceIn(0f, 1f)
+        // Weighted combination: color is more important for RL ball detection
+        val finalSimilarity = (avgColorSimilarity * 0.7f + avgTextureSimilarity * 0.3f)
+        
+        return finalSimilarity.coerceIn(0f, 1f)
+    }
+    
+    // Check if a color is in the metallic gray range of Rocket League ball
+    private fun isMetallicGrayColor(red: Int, green: Int, blue: Int): Boolean {
+        // RL ball is metallic gray with slight blue tint
+        val avgColor = (red + green + blue) / 3
+        val isGrayish = abs(red - green) < 30 && abs(green - blue) < 30 && abs(red - blue) < 30
+        val isInRange = avgColor in 120..200 // Metallic gray range
+        val hasBlueishTint = blue >= red && blue >= green // Slight blue tint
+        
+        return isGrayish && isInRange && (hasBlueishTint || abs(blue - avgColor) < 20)
+    }
+    
+    // Legacy similarity calculation (kept for fallback)
+    private fun calculateTemplateSimilarity(bitmap: Bitmap, template: Bitmap, startX: Int, startY: Int): Float {
+        return calculateEnhancedSimilarity(bitmap, template, startX, startY)
     }
     
     // Detect circular objects using edge detection and shape analysis

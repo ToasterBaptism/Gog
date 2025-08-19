@@ -62,7 +62,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 9
-        versionName "2.14-TEMPLATE-MATCHING"
+        versionName "2.15-ENHANCED-BALL-DETECTION"
         ndk {
             abiFilters "arm64-v8a", "armeabi-v7a"
         }
