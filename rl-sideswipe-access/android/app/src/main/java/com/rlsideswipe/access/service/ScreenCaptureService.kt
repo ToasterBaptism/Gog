@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.ImageFormat
+import android.graphics.PixelFormat
 
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
@@ -24,6 +25,7 @@ import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.MutableLiveData
 import com.rlsideswipe.access.R
+import com.rlsideswipe.access.ai.Detection
 import com.rlsideswipe.access.ai.FrameResult
 import com.rlsideswipe.access.ai.InferenceEngine
 // import com.rlsideswipe.access.ai.TFLiteInferenceEngine // DISABLED to prevent crashes
@@ -173,11 +175,11 @@ class ScreenCaptureService : Service() {
             
             Log.d(TAG, "Display: ${width}x${height}, density: $density")
             
-            // Use YUV_420_888 for better performance
-            val format = ImageFormat.YUV_420_888
+            // Use RGBA_8888 for stability (avoid complex YUV conversion crashes)
+            val format = PixelFormat.RGBA_8888
             
             Log.d(TAG, "Creating ImageReader with format: $format")
-            imageReader = ImageReader.newInstance(width, height, format, 3) // Increased buffer size
+            imageReader = ImageReader.newInstance(width, height, format, 2) // Reduced buffer size for stability
             imageReader?.setOnImageAvailableListener(imageAvailableListener, backgroundHandler)
             
             Log.d(TAG, "Creating VirtualDisplay...")
@@ -249,34 +251,60 @@ class ScreenCaptureService : Service() {
     }
     
     private val imageAvailableListener = ImageReader.OnImageAvailableListener { reader ->
-        val currentTime = System.currentTimeMillis()
-        
-        // Skip frame if we're still processing the previous one
-        if (isProcessingFrame) {
-            reader.acquireLatestImage()?.close()
-            droppedFrames++
-            return@OnImageAvailableListener
-        }
-        
-        // Throttle frame processing to target FPS
-        if (currentTime - lastFrameTime < FRAME_INTERVAL_MS) {
-            reader.acquireLatestImage()?.close()
-            return@OnImageAvailableListener
-        }
-        
-        lastFrameTime = currentTime
-        frameCount++
-        
-        val image = reader.acquireLatestImage()
-        if (image != null) {
-            isProcessingFrame = true
-            processFrame(image)
-            image.close()
-        }
-        
-        // Log performance metrics periodically
-        if (currentTime - lastPerformanceLog > PERFORMANCE_LOG_INTERVAL) {
-            logPerformanceMetrics(currentTime)
+        try {
+            val currentTime = System.currentTimeMillis()
+            
+            // Skip frame if we're still processing the previous one
+            if (isProcessingFrame) {
+                try {
+                    reader.acquireLatestImage()?.close()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error closing skipped image", e)
+                }
+                droppedFrames++
+                return@OnImageAvailableListener
+            }
+            
+            // Throttle frame processing to target FPS
+            if (currentTime - lastFrameTime < FRAME_INTERVAL_MS) {
+                try {
+                    reader.acquireLatestImage()?.close()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error closing throttled image", e)
+                }
+                return@OnImageAvailableListener
+            }
+            
+            lastFrameTime = currentTime
+            frameCount++
+            
+            val image = try {
+                reader.acquireLatestImage()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error acquiring image", e)
+                null
+            }
+            
+            if (image != null) {
+                try {
+                    isProcessingFrame = true
+                    processFrame(image)
+                } finally {
+                    try {
+                        image.close()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Error closing image", e)
+                    }
+                }
+            }
+            
+            // Log performance metrics periodically
+            if (currentTime - lastPerformanceLog > PERFORMANCE_LOG_INTERVAL) {
+                logPerformanceMetrics(currentTime)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Critical error in imageAvailableListener", e)
+            isProcessingFrame = false
         }
     }
     
@@ -284,30 +312,24 @@ class ScreenCaptureService : Service() {
         val startTime = System.nanoTime()
         
         try {
-            val bitmap = BitmapUtils.imageToBitmap(image)
+            // Simple and safe frame processing
+            val bitmap = convertImageToBitmapSafely(image)
             if (bitmap != null) {
-                // Downsample large images for better performance
-                val processedBitmap = if (bitmap.width > 1080 || bitmap.height > 1080) {
-                    val downsampled = BitmapUtils.downsampleBitmap(bitmap, 1080)
-                    bitmap.recycle()
-                    downsampled
-                } else {
-                    bitmap
-                }
+                // Simple ball detection instead of complex AI
+                val ballDetection = detectBallSimple(bitmap)
                 
-                val frameResult = inferenceEngine?.infer(processedBitmap)
-                if (frameResult != null) {
+                if (ballDetection != null) {
                     // Post results on main thread
                     mainHandler.post {
-                        frameResults.value = frameResult
+                        frameResults.value = ballDetection
                         
-                        val trajectory = trajectoryPredictor?.update(frameResult.ball, System.currentTimeMillis())
+                        val trajectory = trajectoryPredictor?.update(ballDetection.ball, System.currentTimeMillis())
                         if (trajectory != null) {
                             trajectoryPoints.value = trajectory
                         }
                     }
                 }
-                processedBitmap.recycle()
+                bitmap.recycle()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error processing frame", e)
@@ -320,6 +342,118 @@ class ScreenCaptureService : Service() {
                 Log.w(TAG, "Slow frame processing: ${processingTime}ms")
             }
         }
+    }
+    
+    private fun convertImageToBitmapSafely(image: Image): Bitmap? {
+        return try {
+            // Only handle RGBA format to avoid complex YUV conversion crashes
+            if (image.format == PixelFormat.RGBA_8888) {
+                val planes = image.planes
+                if (planes.isNotEmpty()) {
+                    val buffer = planes[0].buffer
+                    val pixelStride = planes[0].pixelStride
+                    val rowStride = planes[0].rowStride
+                    val rowPadding = rowStride - pixelStride * image.width
+                    
+                    val bitmap = Bitmap.createBitmap(
+                        image.width + rowPadding / pixelStride,
+                        image.height,
+                        Bitmap.Config.ARGB_8888
+                    )
+                    
+                    bitmap.copyPixelsFromBuffer(buffer)
+                    
+                    if (rowPadding == 0) {
+                        bitmap
+                    } else {
+                        // Crop to remove padding
+                        val croppedBitmap = Bitmap.createBitmap(bitmap, 0, 0, image.width, image.height)
+                        bitmap.recycle()
+                        croppedBitmap
+                    }
+                } else null
+            } else {
+                // For other formats, create a simple placeholder
+                Log.d(TAG, "Unsupported image format: ${image.format}, creating placeholder")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Safe bitmap conversion failed", e)
+            null
+        }
+    }
+    
+    private fun detectBallSimple(bitmap: Bitmap): FrameResult? {
+        return try {
+            // Simple color-based ball detection for orange/red ball
+            val width = bitmap.width
+            val height = bitmap.height
+            
+            // Sample pixels to find orange/red circular objects
+            var bestX = -1f
+            var bestY = -1f
+            var maxOrangePixels = 0
+            
+            // Grid search for orange regions
+            val gridSize = 50
+            for (y in 0 until height step gridSize) {
+                for (x in 0 until width step gridSize) {
+                    val orangeCount = countOrangePixelsInRegion(bitmap, x, y, gridSize)
+                    if (orangeCount > maxOrangePixels) {
+                        maxOrangePixels = orangeCount
+                        bestX = x.toFloat() + gridSize / 2f
+                        bestY = y.toFloat() + gridSize / 2f
+                    }
+                }
+            }
+            
+            if (maxOrangePixels > 10) { // Found potential ball
+                Log.d(TAG, "Ball detected at ($bestX, $bestY) with $maxOrangePixels orange pixels")
+                FrameResult(
+                    ball = Detection(
+                        cx = bestX / width, // Normalize to 0-1
+                        cy = bestY / height,
+                        r = 0.05f, // Estimated radius
+                        conf = (maxOrangePixels / 100f).coerceAtMost(1f)
+                    ),
+                    timestampNanos = System.nanoTime()
+                )
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Simple ball detection failed", e)
+            null
+        }
+    }
+    
+    private fun countOrangePixelsInRegion(bitmap: Bitmap, startX: Int, startY: Int, size: Int): Int {
+        return try {
+            var count = 0
+            val endX = (startX + size).coerceAtMost(bitmap.width)
+            val endY = (startY + size).coerceAtMost(bitmap.height)
+            
+            for (y in startY until endY step 5) { // Sample every 5 pixels for performance
+                for (x in startX until endX step 5) {
+                    val pixel = bitmap.getPixel(x, y)
+                    if (isOrangeOrRed(pixel)) {
+                        count++
+                    }
+                }
+            }
+            count
+        } catch (e: Exception) {
+            0
+        }
+    }
+    
+    private fun isOrangeOrRed(pixel: Int): Boolean {
+        val red = (pixel shr 16) and 0xFF
+        val green = (pixel shr 8) and 0xFF
+        val blue = pixel and 0xFF
+        
+        // Detect orange/red colors (typical ball colors in Rocket League)
+        return red > 150 && green > 50 && green < 200 && blue < 100
     }
     
     private fun logPerformanceMetrics(currentTime: Long) {
