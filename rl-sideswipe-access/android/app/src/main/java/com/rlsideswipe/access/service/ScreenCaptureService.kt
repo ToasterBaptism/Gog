@@ -463,7 +463,11 @@ class ScreenCaptureService : Service() {
                 addBallToHistory(bestX, bestY, currentTime)
                 
                 // Always show current ball position for debugging
-                Log.d(TAG, "🎯 BALL DETECTED: Position ($bestX, $bestY), Pixels: $maxBallPixels, Screen: ${width}x${height}")
+                Log.d(TAG, "🎯 BALL DETECTED: Position ($bestX, $bestY), Pixels: $maxBallPixels")
+                Log.d(TAG, "📱 Screen info: ${screenWidth}x${screenHeight}, landscape: $isLandscapeMode")
+                Log.d(TAG, "🖼️ Image dimensions: ${width}x${height}")
+                Log.d(TAG, "📊 Ball position relative to image: X=${"%.1f".format(bestX.toFloat()/width*100)}%, Y=${"%.1f".format(bestY.toFloat()/height*100)}%")
+                Log.d(TAG, "🔍 Search area used: ($searchStartX, $searchStartY) to ($searchEndX, $searchEndY)")
                 
                 // Calculate velocity and predict trajectory (relaxed validation for debugging)
                 if (ballHistory.size >= 2 && maxBallPixels >= 10) { // Relaxed requirements for debugging
@@ -691,6 +695,7 @@ class ScreenCaptureService : Service() {
             startService(predictionOverlayService)
             
             // Pass screen info to overlay service for coordinate transformation
+            Log.d(TAG, "📡 Passing screen info to overlay: ${screenWidth}x${screenHeight}, landscape: $isLandscapeMode")
             PredictionOverlayService.updateScreenInfo(screenWidth, screenHeight, isLandscapeMode)
             
             Log.d(TAG, "Prediction overlay service started with screen info: ${screenWidth}x${screenHeight}, landscape: $isLandscapeMode")

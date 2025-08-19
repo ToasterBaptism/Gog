@@ -147,8 +147,18 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
         val viewWidth = width.toFloat()
         val viewHeight = height.toFloat()
         
+        Log.d(TAG, "🔍 COORDINATE DEBUG:")
+        Log.d(TAG, "  📱 Screen info: ${screenWidth}x${screenHeight}, landscape: $isLandscapeMode")
+        Log.d(TAG, "  📺 View dimensions: ${viewWidth}x${viewHeight}")
+        Log.d(TAG, "  🎯 Input coordinates: ($x, $y)")
+        
         if (screenWidth == 0 || screenHeight == 0) {
-            // No screen info yet, use coordinates as-is
+            Log.w(TAG, "  ⚠️ No screen info available, using coordinates as-is")
+            return Pair(x, y)
+        }
+        
+        if (viewWidth == 0f || viewHeight == 0f) {
+            Log.w(TAG, "  ⚠️ View not ready, using coordinates as-is")
             return Pair(x, y)
         }
         
@@ -159,7 +169,9 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
         val transformedX = x * scaleX
         val transformedY = y * scaleY
         
-        Log.v(TAG, "🔄 Transform: ($x,$y) -> ($transformedX,$transformedY) [scale: $scaleX,$scaleY]")
+        Log.d(TAG, "  🔄 Scale factors: X=$scaleX, Y=$scaleY")
+        Log.d(TAG, "  ✅ Transformed: ($x,$y) -> ($transformedX,$transformedY)")
+        
         return Pair(transformedX, transformedY)
     }
     
@@ -174,17 +186,24 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
                 val currentPos = predictions[0]
                 val (transformedX, transformedY) = transformCoordinates(currentPos.x, currentPos.y)
                 
-                paint.color = Color.argb(200, 255, 0, 255) // Bright magenta
+                // Draw both raw and transformed positions for comparison
+                paint.color = Color.argb(200, 255, 0, 255) // Bright magenta - transformed
                 paint.style = Paint.Style.STROKE
                 paint.strokeWidth = 8f
                 canvas.drawCircle(transformedX, transformedY, 30f, paint) // Large circle around detected ball
                 
-                // Draw crosshair at detected position
+                // Draw crosshair at transformed position
                 paint.strokeWidth = 4f
                 canvas.drawLine(transformedX - 20f, transformedY, transformedX + 20f, transformedY, paint)
                 canvas.drawLine(transformedX, transformedY - 20f, transformedX, transformedY + 20f, paint)
                 
+                // Also draw raw coordinates in different color for comparison
+                paint.color = Color.argb(150, 0, 255, 255) // Cyan - raw coordinates
+                paint.strokeWidth = 4f
+                canvas.drawCircle(currentPos.x, currentPos.y, 20f, paint) // Smaller circle for raw position
+                
                 Log.d(TAG, "🎯 Ball indicator: original(${"%.1f".format(currentPos.x)},${"%.1f".format(currentPos.y)}) -> transformed(${"%.1f".format(transformedX)},${"%.1f".format(transformedY)})")
+                Log.d(TAG, "🖼️ Canvas dimensions: ${canvas.width}x${canvas.height}")
             }
             
             // Draw prediction path
