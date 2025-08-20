@@ -509,32 +509,39 @@ class ScreenCaptureService : Service() {
                 }
                 
                 // Combine template matches with test points for debugging
-                val overlayPoints = mutableListOf<PredictionOverlayService.PredictionPoint>()
-                
-                // Add template matches as ball detection points (time=0f)
-                overlayPoints.addAll(templateMatches.map { match ->
-                    PredictionOverlayService.PredictionPoint(match.x, match.y, 0f)
-                })
-                
-                // Add test points for reference (time=1f for center, 2f for corners)
-                overlayPoints.add(PredictionOverlayService.PredictionPoint(screenWidth * 0.1f, screenHeight * 0.1f, 2f))
-                overlayPoints.add(PredictionOverlayService.PredictionPoint(screenWidth * 0.5f, screenHeight * 0.5f, 1f))
-                overlayPoints.add(PredictionOverlayService.PredictionPoint(screenWidth * 0.9f, screenHeight * 0.9f, 2f))
+                val isTflite = try { com.rlsideswipe.access.BuildConfig.FLAVOR?.contains("tflite") == true } catch (e: Exception) { false }
+                val overlayPoints = if (isTflite) {
+                    templateMatches.map { match ->
+                        PredictionOverlayService.PredictionPoint(match.x, match.y, 0f)
+                    }
+                } else {
+                    val points = mutableListOf<PredictionOverlayService.PredictionPoint>()
+                    points.addAll(templateMatches.map { match ->
+                        PredictionOverlayService.PredictionPoint(match.x, match.y, 0f)
+                    })
+                    points.add(PredictionOverlayService.PredictionPoint(screenWidth * 0.1f, screenHeight * 0.1f, 2f))
+                    points.add(PredictionOverlayService.PredictionPoint(screenWidth * 0.5f, screenHeight * 0.5f, 1f))
+                    points.add(PredictionOverlayService.PredictionPoint(screenWidth * 0.9f, screenHeight * 0.9f, 2f))
+                    points
+                }
                 
                 PredictionOverlayService.updatePredictions(overlayPoints)
             } else {
-                Log.d(TAG, "❌ NO TEMPLATE MATCHES - showing test overlay points for debugging")
-                // Send test points to verify overlay works (time=1f for center, 2f for corners)
-                val testPoints = listOf(
-                    PredictionOverlayService.PredictionPoint(screenWidth * 0.1f, screenHeight * 0.1f, 2f),
-                    PredictionOverlayService.PredictionPoint(screenWidth * 0.5f, screenHeight * 0.5f, 1f),
-                    PredictionOverlayService.PredictionPoint(screenWidth * 0.9f, screenHeight * 0.9f, 2f)
-                )
-                Log.d(TAG, "🧪 Sending test points: screen ${screenWidth}x${screenHeight}")
-                testPoints.forEach { point ->
-                    Log.d(TAG, "🧪 Test point: (${point.x}, ${point.y}) time=${point.time}")
+                val isTflite = try { com.rlsideswipe.access.BuildConfig.FLAVOR?.contains("tflite") == true } catch (e: Exception) { false }
+                if (!isTflite) {
+                    Log.d(TAG, "❌ NO TEMPLATE MATCHES - showing test overlay points for debugging")
+                    // Send test points to verify overlay works (time=1f for center, 2f for corners)
+                    val testPoints = listOf(
+                        PredictionOverlayService.PredictionPoint(screenWidth * 0.1f, screenHeight * 0.1f, 2f),
+                        PredictionOverlayService.PredictionPoint(screenWidth * 0.5f, screenHeight * 0.5f, 1f),
+                        PredictionOverlayService.PredictionPoint(screenWidth * 0.9f, screenHeight * 0.9f, 2f)
+                    )
+                    Log.d(TAG, "🧪 Sending test points: screen ${screenWidth}x${screenHeight}")
+                    testPoints.forEach { point ->
+                        Log.d(TAG, "🧪 Test point: (${point.x}, ${point.y}) time=${point.time}")
+                    }
+                    PredictionOverlayService.updatePredictions(testPoints)
                 }
-                PredictionOverlayService.updatePredictions(testPoints)
             }
             
             // 🔍 FALLBACK: Shape analysis if template matching fails
@@ -1291,14 +1298,19 @@ class ScreenCaptureService : Service() {
                 Log.d(TAG, "📡 Passing screen info to overlay: ${screenWidth}x${screenHeight}, landscape: $isLandscapeMode")
                 PredictionOverlayService.updateScreenInfo(screenWidth, screenHeight, isLandscapeMode)
                 
-                // Send immediate test points to verify overlay is working
-                val testPoints = listOf(
-                    PredictionOverlayService.PredictionPoint(screenWidth * 0.1f, screenHeight * 0.1f, 0f),
-                    PredictionOverlayService.PredictionPoint(screenWidth * 0.5f, screenHeight * 0.5f, 1f),
-                    PredictionOverlayService.PredictionPoint(screenWidth * 0.9f, screenHeight * 0.9f, 2f)
-                )
-                Log.d(TAG, "🧪 STARTUP: Sending initial test points to verify overlay")
-                PredictionOverlayService.updatePredictions(testPoints)
+                val isTflite = try { com.rlsideswipe.access.BuildConfig.FLAVOR?.contains("tflite") == true } catch (e: Exception) { false }
+                if (!isTflite) {
+                    // Send immediate test points to verify overlay is working (non-tflite builds)
+                    val testPoints = listOf(
+                        PredictionOverlayService.PredictionPoint(screenWidth * 0.1f, screenHeight * 0.1f, 0f),
+                        PredictionOverlayService.PredictionPoint(screenWidth * 0.5f, screenHeight * 0.5f, 1f),
+                        PredictionOverlayService.PredictionPoint(screenWidth * 0.9f, screenHeight * 0.9f, 2f)
+                    )
+                    Log.d(TAG, "🧪 STARTUP: Sending initial test points to verify overlay")
+                    PredictionOverlayService.updatePredictions(testPoints)
+                } else {
+                    Log.d(TAG, "🧪 STARTUP: tflite build - skipping initial debug test points")
+                }
             }, 500) // 500ms delay to ensure service is ready
             
             Log.d(TAG, "Prediction overlay service started with screen info: ${screenWidth}x${screenHeight}, landscape: $isLandscapeMode")
