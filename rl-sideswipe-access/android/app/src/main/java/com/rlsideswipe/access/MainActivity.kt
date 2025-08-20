@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,6 +19,12 @@ class MainActivity : ReactActivity() {
 
     private var pendingMediaProjectionResult: ((Intent?) -> Unit)? = null
     private lateinit var mediaProjectionLauncher: ActivityResultLauncher<Intent>
+    private val timeoutHandler = Handler(Looper.getMainLooper())
+    private val timeoutRunnable = Runnable {
+        Log.w("MainActivity", "MediaProjection permission request timed out")
+        pendingMediaProjectionResult?.invoke(null)
+        pendingMediaProjectionResult = null
+    }
 
     /**
      * Returns the name of the main component registered from JavaScript. This is used to schedule
@@ -40,6 +48,7 @@ class MainActivity : ReactActivity() {
         ) { result ->
             Log.d("MainActivity", "MediaProjection result: ${result.resultCode}")
             val callback = pendingMediaProjectionResult
+            timeoutHandler.removeCallbacks(timeoutRunnable)
             pendingMediaProjectionResult = null
             
             if (result.resultCode == Activity.RESULT_OK && result.data != null) {
@@ -71,16 +80,19 @@ class MainActivity : ReactActivity() {
             val captureIntent = mediaProjectionManager.createScreenCaptureIntent()
             Log.d("MainActivity", "Created screen capture intent: $captureIntent")
             
-            // Set up the callback with enhanced logging (v2.17 fix)
+            // Set up the callback with enhanced logging and timeout handling
             pendingMediaProjectionResult = { result ->
                 Log.d("MainActivity", "=== MEDIA PROJECTION CALLBACK INVOKED ===")
                 Log.d("MainActivity", "MediaProjection callback invoked with result: $result")
                 Log.d("MainActivity", "Result is null: ${result == null}")
-                
-                // Use the original callback parameter directly (v2.17 fix)
+                // Cancel timeout when we get a result
+                timeoutHandler.removeCallbacks(timeoutRunnable)
+                // Invoke the original callback
                 callback(result)
                 Log.d("MainActivity", "Original callback invoked successfully")
             }
+            // Start timeout to guard against no activity result
+            timeoutHandler.postDelayed(timeoutRunnable, 30000)
             
             Log.d("MainActivity", "Callback set up successfully, launching MediaProjection intent...")
             mediaProjectionLauncher.launch(captureIntent)

@@ -77,8 +77,11 @@ object BitmapUtils {
         val height = image.height
         
         return if (yPixelStride == 1 && uvPixelStride == 1) {
-            // Packed format - can use optimized conversion
-            yuv420PackedToBitmap(yBuffer, uBuffer, vBuffer, width, height)
+            // Packed format - use rowStride-aware conversion
+            yuv420PackedToBitmap(
+                yBuffer, uBuffer, vBuffer, width, height,
+                yPlane.rowStride, uPlane.rowStride, vPlane.rowStride
+            )
         } else {
             // Semi-planar or other format - use general conversion
             yuv420GeneralToBitmap(image, yBuffer, uBuffer, vBuffer, yPlane, uPlane, vPlane)
@@ -90,7 +93,10 @@ object BitmapUtils {
         uBuffer: ByteBuffer,
         vBuffer: ByteBuffer,
         width: Int,
-        height: Int
+        height: Int,
+        yRowStride: Int,
+        uRowStride: Int,
+        vRowStride: Int
     ): Bitmap? {
         val yData = ByteArray(yBuffer.remaining())
         val uData = ByteArray(uBuffer.remaining())
@@ -101,20 +107,24 @@ object BitmapUtils {
         vBuffer.get(vData)
         
         val pixels = IntArray(width * height)
-        var yIndex = 0
-        var uvIndex = 0
         
-        for (y in 0 until height) {
-            for (x in 0 until width) {
-                val yValue = yData[yIndex++].toInt() and 0xFF
+        // Respect per-row stride for all planes
+        for (row in 0 until height) {
+            val yBase = row * yRowStride
+            val uBase = (row / 2) * uRowStride
+            val vBase = (row / 2) * vRowStride
+            for (col in 0 until width) {
+                val yIndex = yBase + col // yPixelStride == 1 in this branch
+                val uvCol = col / 2      // 4:2:0 subsampling
+                val uIndex = uBase + uvCol
+                val vIndex = vBase + uvCol
                 
-                // UV values are subsampled (4:2:0)
-                val uvPixelIndex = (y / 2) * (width / 2) + (x / 2)
-                val uValue = if (uvPixelIndex < uData.size) uData[uvPixelIndex].toInt() and 0xFF else 128
-                val vValue = if (uvPixelIndex < vData.size) vData[uvPixelIndex].toInt() and 0xFF else 128
+                val yValue = if (yIndex < yData.size) yData[yIndex].toInt() and 0xFF else 0
+                val uValue = if (uIndex < uData.size) uData[uIndex].toInt() and 0xFF else 128
+                val vValue = if (vIndex < vData.size) vData[vIndex].toInt() and 0xFF else 128
                 
                 val rgb = yuvToRgb(yValue, uValue, vValue)
-                pixels[y * width + x] = rgb
+                pixels[row * width + col] = rgb
             }
         }
         

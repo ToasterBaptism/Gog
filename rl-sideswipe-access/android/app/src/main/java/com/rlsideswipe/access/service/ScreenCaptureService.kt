@@ -28,7 +28,6 @@ import com.rlsideswipe.access.R
 import com.rlsideswipe.access.ai.Detection
 import com.rlsideswipe.access.ai.FrameResult
 import com.rlsideswipe.access.ai.InferenceEngine
-import com.rlsideswipe.access.ai.TFLiteInferenceEngine
 import com.rlsideswipe.access.ai.StubInferenceEngine
 import com.rlsideswipe.access.ai.TrajectoryPredictor
 import com.rlsideswipe.access.ai.KalmanTrajectoryPredictor
@@ -103,7 +102,6 @@ class ScreenCaptureService : Service() {
         initializeBallTemplateManager()
         lastPerformanceLog = System.currentTimeMillis()
         startTime = System.currentTimeMillis()
-        startPredictionOverlay()
         Log.d(TAG, "ScreenCaptureService created")
     }
     
@@ -224,6 +222,13 @@ class ScreenCaptureService : Service() {
             Log.d(TAG, "🖥️ Display: ${width}x${height}, density: $density, rotation: $rotation")
             Log.d(TAG, "📱 Corrected: ${screenWidth}x${screenHeight}")
             Log.d(TAG, "📱 Orientation: ${if (isLandscapeMode) "LANDSCAPE" else "PORTRAIT"} (forced for RL)")
+
+            // Ensure overlay is started or updated with correct screen info
+            if (predictionOverlayService == null) {
+                startPredictionOverlay()
+            } else {
+                PredictionOverlayService.updateScreenInfo(screenWidth, screenHeight, isLandscapeMode)
+            }
             
             // Use RGBA_8888 for stability (avoid complex YUV conversion crashes)
             val format = PixelFormat.RGBA_8888
@@ -262,21 +267,8 @@ class ScreenCaptureService : Service() {
         backgroundHandler?.post {
             try {
                 Log.d(TAG, "Initializing AI components...")
-                Log.i(TAG, "=== v2.17 ENHANCED: TENSORFLOW LITE RESTORED ===")
-                Log.i(TAG, "=== ATTEMPTING TO INITIALIZE TENSORFLOW LITE FOR BALL DETECTION ===")
-                
-                // Initialize inference engine - try TensorFlow Lite first, fallback to stub
-                inferenceEngine = try {
-                    Log.d(TAG, "Initializing inference engine...")
-                    Log.i(TAG, "🤖 ATTEMPTING TENSORFLOW LITE INITIALIZATION...")
-                    val tfliteEngine = TFLiteInferenceEngine(this@ScreenCaptureService)
-                    Log.i(TAG, "✅ TENSORFLOW LITE INFERENCE ENGINE INITIALIZED SUCCESSFULLY")
-                    tfliteEngine
-                } catch (e: Exception) {
-                    Log.w(TAG, "❌ TensorFlow Lite initialization failed, using stub: ${e.message}", e)
-                    Log.i(TAG, "🔄 FALLBACK: Using stub inference engine")
-                    StubInferenceEngine()
-                }
+                // Use stub inference engine unconditionally (TF Lite dependency removed)
+                inferenceEngine = StubInferenceEngine()
                 
                 // Initialize trajectory predictor
                 trajectoryPredictor = try {
