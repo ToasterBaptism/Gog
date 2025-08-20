@@ -61,8 +61,8 @@ android {
         applicationId "com.rlsideswipe.access"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 10
-        versionName "2.17-CALLBACK-FIX"
+        versionCode 11
+        versionName "2.18-TENSORFLOW-LITE-RESTORED"
         ndk {
             abiFilters "arm64-v8a", "armeabi-v7a"
         }
@@ -95,6 +95,15 @@ android {
     kotlinOptions {
         jvmTarget = '17'
     }
+    
+    // Configure APK naming with version
+    applicationVariants.all { variant ->
+        variant.outputs.all {
+            def versionName = variant.versionName
+            def buildType = variant.buildType.name
+            outputFileName = "RL-Sideswipe-Access-v${versionName}-${buildType}.apk"
+        }
+    }
 }
 
 dependencies {
@@ -104,6 +113,10 @@ dependencies {
     implementation "com.google.android.material:material:1.12.0"
     implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.8.4"
     implementation "androidx.activity:activity-ktx:1.9.1"
+    
+    // TensorFlow Lite for ball detection
+    implementation "org.tensorflow:tensorflow-lite:2.13.0"
+    implementation "org.tensorflow:tensorflow-lite-support:0.4.4"
     
     // MediaPipe Tasks Vision
     implementation "com.google.mediapipe:tasks-vision:0.10.14"

@@ -28,7 +28,7 @@ import com.rlsideswipe.access.R
 import com.rlsideswipe.access.ai.Detection
 import com.rlsideswipe.access.ai.FrameResult
 import com.rlsideswipe.access.ai.InferenceEngine
-// import com.rlsideswipe.access.ai.TFLiteInferenceEngine // DISABLED to prevent crashes
+import com.rlsideswipe.access.ai.TFLiteInferenceEngine
 import com.rlsideswipe.access.ai.StubInferenceEngine
 import com.rlsideswipe.access.ai.TrajectoryPredictor
 import com.rlsideswipe.access.ai.KalmanTrajectoryPredictor
@@ -262,16 +262,19 @@ class ScreenCaptureService : Service() {
         backgroundHandler?.post {
             try {
                 Log.d(TAG, "Initializing AI components...")
-                Log.i(TAG, "=== v2.22 TENSORFLOW LITE CLASS COMPLETELY REMOVED ===")
-                Log.i(TAG, "=== NO TENSORFLOW LITE CODE EXISTS IN THE APP ANYMORE ===")
+                Log.i(TAG, "=== v2.17 ENHANCED: TENSORFLOW LITE RESTORED ===")
+                Log.i(TAG, "=== ATTEMPTING TO INITIALIZE TENSORFLOW LITE FOR BALL DETECTION ===")
                 
-                // Initialize inference engine - using stub only to prevent TensorFlow Lite crashes
+                // Initialize inference engine - try TensorFlow Lite first, fallback to stub
                 inferenceEngine = try {
                     Log.d(TAG, "Initializing inference engine...")
-                    Log.i(TAG, "=== USING STUB INFERENCE ENGINE ONLY - NO TENSORFLOW LITE ===")
-                    StubInferenceEngine()
+                    Log.i(TAG, "🤖 ATTEMPTING TENSORFLOW LITE INITIALIZATION...")
+                    val tfliteEngine = TFLiteInferenceEngine(this@ScreenCaptureService)
+                    Log.i(TAG, "✅ TENSORFLOW LITE INFERENCE ENGINE INITIALIZED SUCCESSFULLY")
+                    tfliteEngine
                 } catch (e: Exception) {
-                    Log.w(TAG, "Inference engine initialization failed, using stub: ${e.message}", e)
+                    Log.w(TAG, "❌ TensorFlow Lite initialization failed, using stub: ${e.message}", e)
+                    Log.i(TAG, "🔄 FALLBACK: Using stub inference engine")
                     StubInferenceEngine()
                 }
                 
