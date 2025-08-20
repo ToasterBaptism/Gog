@@ -2,14 +2,25 @@ package com.rlsideswipe.access.ai
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.RadialGradient
+import android.graphics.Shader
 import android.util.Log
 import org.tensorflow.lite.Interpreter
+// import org.tensorflow.lite.gpu.CompatibilityList
+// import org.tensorflow.lite.gpu.GpuDelegate
+// import org.tensorflow.lite.nnapi.NnApiDelegate
 import java.io.FileInputStream
-import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
+import kotlin.math.*
+// import com.rlsideswipe.access.util.OpenCVUtils // Not available
 
 data class Detection(
     val cx: Float,
@@ -31,232 +42,303 @@ interface InferenceEngine {
 
 
 
-/**
- * TensorFlow Lite implementation for ball detection
- * Restored in v2.17 ENHANCED with proper error handling
- */
 class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
+    
+    private var interpreter: Interpreter? = null
+    private var inputBuffer: ByteBuffer? = null
+    private var outputBuffer: ByteBuffer? = null
+    private var hanningWindow: FloatArray? = null
     
     companion object {
         private const val TAG = "TFLiteInferenceEngine"
         private const val MODEL_FILE = "rl_sideswipe_ball_v1.tflite"
-        private const val INPUT_SIZE = 416 // Model input size
-        private const val CONFIDENCE_THRESHOLD = 0.25f // Lowered from 0.65 for better detection
+        private const val INPUT_SIZE = 320
+        private const val CHANNELS = 3
+        private const val BYTES_PER_CHANNEL = 4 // Float32
+        private const val CONFIDENCE_THRESHOLD = 0.25f // Lowered for better detection
+        private const val OUTPUT_SIZE = 5 // [x, y, w, h, confidence]
     }
-    
-    private var interpreter: Interpreter? = null
-    private var inputBuffer: ByteBuffer? = null
-    private var outputBuffer: Array<Array<FloatArray>>? = null
     
     init {
         try {
             Log.d(TAG, "🤖 Initializing TensorFlow Lite inference engine...")
             loadModel()
-            allocateBuffers()
+            initializeBuffers()
+            createHanningWindow()
             Log.i(TAG, "✅ TensorFlow Lite inference engine initialized successfully")
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to initialize TensorFlow Lite: ${e.message}", e)
-            interpreter = null
+            // Clean up any partially initialized resources
+            cleanup()
+            throw RuntimeException("TensorFlow Lite initialization failed: ${e.message}", e)
         }
+    }
+    
+    private fun cleanup() {
+        try {
+            interpreter?.close()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error during cleanup", e)
+        }
+        interpreter = null
+        inputBuffer = null
+        outputBuffer = null
+        hanningWindow = null
     }
     
     private fun loadModel() {
         try {
+            Log.d(TAG, "📁 Loading TensorFlow Lite model...")
             val modelBuffer = loadModelFile()
-            val options = Interpreter.Options().apply {
-                setNumThreads(2) // Use 2 threads for better performance
-                setUseNNAPI(false) // Disable NNAPI for compatibility
-            }
+            Log.d(TAG, "📁 Model file loaded, size: ${modelBuffer.remaining()} bytes")
+            
+            val options = Interpreter.Options()
+            
+            // Set number of threads for CPU inference
+            options.setNumThreads(4)
+            Log.d(TAG, "🖥️ Using CPU inference with 4 threads")
+            
             interpreter = Interpreter(modelBuffer, options)
-            Log.d(TAG, "📁 Model loaded: $MODEL_FILE")
+            Log.d(TAG, "✅ TensorFlow Lite interpreter created successfully")
+            
+            // Verify model input/output shapes
+            val inputShape = interpreter?.getInputTensor(0)?.shape()
+            val outputShape = interpreter?.getOutputTensor(0)?.shape()
+            Log.d(TAG, "📊 Model input shape: ${inputShape?.contentToString()}")
+            Log.d(TAG, "📊 Model output shape: ${outputShape?.contentToString()}")
+            
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to load model: ${e.message}", e)
-            throw e
+            Log.e(TAG, "❌ Failed to load TensorFlow Lite model", e)
+            throw e // Re-throw to trigger fallback
+        }
+    }
+    
+
+    
+    private fun initializeBuffers() {
+        val inputSize = INPUT_SIZE * INPUT_SIZE * CHANNELS * BYTES_PER_CHANNEL
+        inputBuffer = ByteBuffer.allocateDirect(inputSize).apply {
+            order(ByteOrder.nativeOrder())
+        }
+        
+        val outputSize = OUTPUT_SIZE * BYTES_PER_CHANNEL
+        outputBuffer = ByteBuffer.allocateDirect(outputSize).apply {
+            order(ByteOrder.nativeOrder())
+        }
+    }
+    
+    private fun createHanningWindow() {
+        val size = INPUT_SIZE
+        val center = size / 2f
+        val radius = center * 0.9f // Slightly smaller than full radius
+        
+        hanningWindow = FloatArray(size * size) { i ->
+            val x = i % size
+            val y = i / size
+            val dx = x - center
+            val dy = y - center
+            val distance = sqrt(dx * dx + dy * dy)
+            
+            if (distance <= radius) {
+                val normalized = distance / radius
+                // Hanning window: 0.5 * (1 + cos(π * normalized))
+                (0.5 * (1.0 + cos(PI * normalized))).toFloat()
+            } else {
+                0f
+            }
         }
     }
     
     private fun loadModelFile(): MappedByteBuffer {
-        val assetFileDescriptor = context.assets.openFd(MODEL_FILE)
-        val inputStream = FileInputStream(assetFileDescriptor.fileDescriptor)
-        val fileChannel = inputStream.channel
-        val startOffset = assetFileDescriptor.startOffset
-        val declaredLength = assetFileDescriptor.declaredLength
-        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
-    }
-    
-    private fun allocateBuffers() {
-        // Input buffer: [1, 416, 416, 3] - RGB image
-        val inputShape = interpreter?.getInputTensor(0)?.shape()
-        Log.d(TAG, "📊 Input shape: ${inputShape?.contentToString()}")
-        
-        inputBuffer = ByteBuffer.allocateDirect(1 * INPUT_SIZE * INPUT_SIZE * 3 * 4) // 4 bytes per float
-        inputBuffer?.order(ByteOrder.nativeOrder())
-        
-        // Output buffer: [1, 10647, 85] - detections
-        val outputShape = interpreter?.getOutputTensor(0)?.shape()
-        Log.d(TAG, "📊 Output shape: ${outputShape?.contentToString()}")
-        
-        if (outputShape != null && outputShape.size >= 3) {
-            outputBuffer = Array(outputShape[0]) { Array(outputShape[1]) { FloatArray(outputShape[2]) } }
+        try {
+            Log.d(TAG, "📂 Opening model file: $MODEL_FILE")
+            val assetFileDescriptor = context.assets.openFd(MODEL_FILE)
+            Log.d(TAG, "📂 Asset file descriptor: length=${assetFileDescriptor.declaredLength}, offset=${assetFileDescriptor.startOffset}")
+            
+            val inputStream = FileInputStream(assetFileDescriptor.fileDescriptor)
+            val fileChannel = inputStream.channel
+            val startOffset = assetFileDescriptor.startOffset
+            val declaredLength = assetFileDescriptor.declaredLength
+            
+            if (declaredLength <= 0) {
+                throw IllegalStateException("Model file is empty or invalid: length=$declaredLength")
+            }
+            
+            val buffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
+            Log.d(TAG, "📂 Model file mapped successfully: ${buffer.remaining()} bytes")
+            return buffer
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to load model file: $MODEL_FILE", e)
+            throw e
         }
     }
     
     override fun warmup() {
         try {
-            if (interpreter == null) {
-                Log.w(TAG, "⚠️ Cannot warmup - interpreter not initialized")
-                return
-            }
-            
             Log.d(TAG, "🔥 Warming up TensorFlow Lite model...")
-            
-            // Create dummy input
-            inputBuffer?.rewind()
-            for (i in 0 until (INPUT_SIZE * INPUT_SIZE * 3)) {
-                inputBuffer?.putFloat(0.5f)
+            // Create dummy input for warmup
+            val dummyInput = Bitmap.createBitmap(INPUT_SIZE, INPUT_SIZE, Bitmap.Config.ARGB_8888)
+            repeat(3) { // Multiple warmup runs for better performance
+                infer(dummyInput)
             }
-            
-            // Run inference
-            inputBuffer?.rewind()
-            interpreter?.run(inputBuffer, outputBuffer)
-            
-            Log.d(TAG, "✅ TensorFlow Lite warmup completed")
+            dummyInput.recycle()
+            Log.d(TAG, "✅ Warmup completed")
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Warmup failed: ${e.message}", e)
+            Log.e(TAG, "❌ Warmup failed", e)
         }
     }
     
     override fun infer(frame: Bitmap): FrameResult {
-        val startTime = System.nanoTime()
+        val timestampNanos = System.nanoTime()
         
         Log.d(TAG, "🔍 INFER: Starting inference on ${frame.width}x${frame.height} frame")
         
-        try {
+        return try {
+            val interpreter = this.interpreter
+            val inputBuffer = this.inputBuffer
+            val outputBuffer = this.outputBuffer
+            
             if (interpreter == null || inputBuffer == null || outputBuffer == null) {
-                Log.w(TAG, "⚠️ Inference engine not properly initialized - interpreter=${interpreter != null}, inputBuffer=${inputBuffer != null}, outputBuffer=${outputBuffer != null}")
-                return FrameResult(null, startTime)
+                Log.w(TAG, "⚠️ Inference engine not properly initialized")
+                return FrameResult(null, timestampNanos)
             }
             
-            // Preprocess image
-            preprocessImage(frame)
+            // Preprocess the frame
+            val preprocessedBitmap = preprocessFrame(frame)
+            
+            // Convert bitmap to input buffer
+            bitmapToBuffer(preprocessedBitmap, inputBuffer)
             
             // Run inference
-            inputBuffer?.rewind()
-            interpreter?.run(inputBuffer, outputBuffer)
+            inputBuffer.rewind()
+            outputBuffer.rewind()
             
-            // Post-process results
-            val detection = postprocessResults()
+            val startTime = System.nanoTime()
+            interpreter.run(inputBuffer, outputBuffer)
+            val inferenceTime = (System.nanoTime() - startTime) / 1_000_000 // Convert to ms
             
-            val inferenceTime = (System.nanoTime() - startTime) / 1_000_000
-            if (detection != null) {
-                Log.d(TAG, "🎯 Ball detected: (${detection.cx}, ${detection.cy}) conf=${detection.conf} [${inferenceTime}ms]")
+            // Parse output with proper coordinate scaling
+            val detection = parseOutput(outputBuffer, frame.width, frame.height)
+            
+            if (inferenceTime > 50) { // Log if inference takes too long
+                Log.w(TAG, "⚠️ Slow inference: ${inferenceTime}ms")
             }
             
-            return FrameResult(detection, startTime)
+            if (detection != null) {
+                Log.d(TAG, "🎯 Ball detected: (${detection.cx}, ${detection.cy}) r=${detection.r} conf=${detection.conf} [${inferenceTime}ms]")
+            } else {
+                Log.d(TAG, "❌ No ball detected above threshold ${CONFIDENCE_THRESHOLD} [${inferenceTime}ms]")
+            }
             
+            preprocessedBitmap.recycle()
+            
+            FrameResult(detection, timestampNanos)
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Inference failed: ${e.message}", e)
-            return FrameResult(null, startTime)
+            Log.e(TAG, "❌ Inference failed", e)
+            FrameResult(null, timestampNanos)
         }
     }
     
-    private fun preprocessImage(bitmap: Bitmap) {
-        inputBuffer?.rewind()
+    private fun preprocessFrame(frame: Bitmap): Bitmap {
+        // 1. Basic preprocessing - resize to model input size
+        val scaledBitmap = Bitmap.createScaledBitmap(frame, INPUT_SIZE, INPUT_SIZE, true)
         
-        // Resize bitmap to model input size
-        val resized = Bitmap.createScaledBitmap(bitmap, INPUT_SIZE, INPUT_SIZE, true)
+        // 2. Apply Hanning window to reduce edge artifacts
+        return applyHanningWindow(scaledBitmap)
+    }
+    
+    private fun applyHanningWindow(bitmap: Bitmap): Bitmap {
+        val hanningWindow = this.hanningWindow ?: return bitmap
         
-        // Convert to float array and normalize [0, 1]
+        val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
         val pixels = IntArray(INPUT_SIZE * INPUT_SIZE)
-        resized.getPixels(pixels, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE)
+        result.getPixels(pixels, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE)
+        
+        for (i in pixels.indices) {
+            val pixel = pixels[i]
+            val alpha = (pixel shr 24) and 0xFF
+            val red = ((pixel shr 16) and 0xFF)
+            val green = ((pixel shr 8) and 0xFF)
+            val blue = (pixel and 0xFF)
+            
+            val windowValue = hanningWindow[i]
+            val newRed = (red * windowValue).toInt().coerceIn(0, 255)
+            val newGreen = (green * windowValue).toInt().coerceIn(0, 255)
+            val newBlue = (blue * windowValue).toInt().coerceIn(0, 255)
+            
+            pixels[i] = (alpha shl 24) or (newRed shl 16) or (newGreen shl 8) or newBlue
+        }
+        
+        result.setPixels(pixels, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE)
+        return result
+    }
+    
+    private fun bitmapToBuffer(bitmap: Bitmap, buffer: ByteBuffer) {
+        buffer.rewind()
+        
+        val pixels = IntArray(INPUT_SIZE * INPUT_SIZE)
+        bitmap.getPixels(pixels, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE)
         
         for (pixel in pixels) {
-            val r = ((pixel shr 16) and 0xFF) / 255.0f
-            val g = ((pixel shr 8) and 0xFF) / 255.0f
-            val b = (pixel and 0xFF) / 255.0f
+            // Extract RGB values and normalize to [0, 1]
+            val red = ((pixel shr 16) and 0xFF) / 255.0f
+            val green = ((pixel shr 8) and 0xFF) / 255.0f
+            val blue = (pixel and 0xFF) / 255.0f
             
-            inputBuffer?.putFloat(r)
-            inputBuffer?.putFloat(g)
-            inputBuffer?.putFloat(b)
-        }
-        
-        if (resized != bitmap) {
-            resized.recycle()
+            // Store as float32 in RGB order
+            buffer.putFloat(red)
+            buffer.putFloat(green)
+            buffer.putFloat(blue)
         }
     }
     
-    private fun postprocessResults(): Detection? {
-        val output = outputBuffer ?: return null
+    private fun parseOutput(outputBuffer: ByteBuffer, originalWidth: Int, originalHeight: Int): Detection? {
+        outputBuffer.rewind()
         
-        var bestDetection: Detection? = null
-        var bestConfidence = 0f
-        var totalDetections = 0
-        var validDetections = 0
+        Log.d(TAG, "🔍 PARSING: Reading output for ${originalWidth}x${originalHeight} frame")
         
-        Log.d(TAG, "🔍 POSTPROCESSING: Starting analysis of ${output[0].size} detections")
+        // Read output: [x, y, w, h, confidence]
+        val x = outputBuffer.float
+        val y = outputBuffer.float
+        val w = outputBuffer.float
+        val h = outputBuffer.float
+        val confidence = outputBuffer.float
         
-        // Parse YOLO output format
-        for (i in output[0].indices) {
-            val detection = output[0][i]
-            totalDetections++
-            
-            if (detection.size >= 85) {
-                // YOLO format: [cx, cy, w, h, objectness, class0, class1, ...]
-                val objectness = detection[4]
-                
-                // Log first few detections for debugging
-                if (i < 5) {
-                    Log.d(TAG, "🔍 Detection $i: objectness=$objectness (threshold=$CONFIDENCE_THRESHOLD)")
-                }
-                
-                if (objectness > CONFIDENCE_THRESHOLD) {
-                    validDetections++
-                    val cx = detection[0] * INPUT_SIZE // Convert to pixel coordinates
-                    val cy = detection[1] * INPUT_SIZE
-                    val w = detection[2] * INPUT_SIZE
-                    val h = detection[3] * INPUT_SIZE
-                    val r = maxOf(w, h) / 2f // Use larger dimension as radius
-                    
-                    // Find best class confidence
-                    var maxClassConf = 0f
-                    for (j in 5 until detection.size) {
-                        if (detection[j] > maxClassConf) {
-                            maxClassConf = detection[j]
-                        }
-                    }
-                    
-                    val finalConfidence = objectness * maxClassConf
-                    
-                    Log.d(TAG, "🎯 Valid detection: pos=($cx,$cy) r=$r obj=$objectness class=$maxClassConf final=$finalConfidence")
-                    
-                    if (finalConfidence > bestConfidence) {
-                        bestConfidence = finalConfidence
-                        bestDetection = Detection(cx, cy, r, finalConfidence)
-                    }
-                }
-            }
+        Log.d(TAG, "🔍 RAW OUTPUT: x=$x, y=$y, w=$w, h=$h, conf=$confidence (threshold=$CONFIDENCE_THRESHOLD)")
+        
+        if (confidence < CONFIDENCE_THRESHOLD) {
+            Log.d(TAG, "❌ Detection below confidence threshold: $confidence < $CONFIDENCE_THRESHOLD")
+            return null
         }
         
-        Log.d(TAG, "📊 POSTPROCESSING SUMMARY: $totalDetections total, $validDetections valid (threshold=$CONFIDENCE_THRESHOLD)")
-        if (bestDetection != null) {
-            Log.d(TAG, "🎯 BEST DETECTION: pos=(${bestDetection.cx},${bestDetection.cy}) r=${bestDetection.r} conf=${bestDetection.conf}")
-        } else {
-            Log.d(TAG, "❌ NO DETECTIONS above threshold")
-        }
+        // Convert from normalized coordinates to original image coordinates
+        val scaleX = originalWidth.toFloat() / INPUT_SIZE
+        val scaleY = originalHeight.toFloat() / INPUT_SIZE
         
-        return bestDetection
+        val centerX = x * originalWidth
+        val centerY = y * originalHeight
+        val radius = (max(w, h) * max(originalWidth, originalHeight)) / 2f
+        
+        Log.d(TAG, "🎯 SCALED DETECTION: centerX=$centerX, centerY=$centerY, radius=$radius, conf=$confidence")
+        Log.d(TAG, "📏 SCALING: scaleX=$scaleX, scaleY=$scaleY, originalSize=${originalWidth}x${originalHeight}")
+        
+        return Detection(
+            cx = centerX,
+            cy = centerY,
+            r = radius,
+            conf = confidence
+        )
     }
     
     override fun close() {
-        try {
-            interpreter?.close()
-            interpreter = null
-            inputBuffer = null
-            outputBuffer = null
-            Log.d(TAG, "🔒 TensorFlow Lite inference engine closed")
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Error closing inference engine: ${e.message}", e)
-        }
+        interpreter?.close()
+        
+        interpreter = null
+        inputBuffer = null
+        outputBuffer = null
+        hanningWindow = null
+        
+        Log.d(TAG, "🔒 Inference engine closed")
     }
 }
 

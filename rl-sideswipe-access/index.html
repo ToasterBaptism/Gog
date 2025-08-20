@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RL Sideswipe Access v2.19 TENSORFLOW-LITE-ACTIVE - Download</title>
+    <title>RL Sideswipe Access v2.20 COORDINATE-SCALING-FIXED - Download</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -137,18 +137,18 @@
     <div class="container">
         <div class="header">
             <div class="title">🎯 RL Sideswipe Access</div>
-            <div class="version">v2.19 TENSORFLOW-LITE-ACTIVE</div>
+            <div class="version">v2.20 COORDINATE-SCALING-FIXED</div>
         </div>
 
         <div class="features">
-            <h3>🚀 Critical Fix - TensorFlow Lite ACTIVE</h3>
+            <h3>🎯 Critical Fix - Coordinate Scaling Bug Fixed</h3>
             <ul>
-                <li>🤖 <strong>TensorFlow Lite Restored:</strong> AI ball detection now properly active</li>
-                <li>🎯 <strong>Ball Detection Fixed:</strong> Service now uses ML inference instead of template matching</li>
-                <li>📊 <strong>Enhanced Debugging:</strong> Comprehensive logging for detection analysis</li>
-                <li>⚡ <strong>Lower Threshold:</strong> Reduced confidence threshold from 65% to 25% for better detection</li>
-                <li>🔍 <strong>Detailed Logging:</strong> Added inference engine status and detection metrics</li>
-                <li>🛠️ <strong>Proper Integration:</strong> Fixed service to actually use TensorFlow Lite model</li>
+                <li>✅ <strong>Coordinate Scaling Fixed:</strong> Red circles now properly appear around detected balls</li>
+                <li>🔄 <strong>Superior Implementation:</strong> Restored backup version with proper cx, cy, r scaling</li>
+                <li>📐 <strong>Model Input Corrected:</strong> Fixed input size from 416x416 to correct 320x320</li>
+                <li>🎯 <strong>Simplified Output:</strong> Uses [x, y, w, h, confidence] format instead of complex YOLO parsing</li>
+                <li>🪟 <strong>Hanning Window:</strong> Added preprocessing to reduce edge artifacts</li>
+                <li>🔍 <strong>Enhanced Debugging:</strong> Detailed coordinate transformation logging</li>
             </ul>
         </div>
 
@@ -184,19 +184,19 @@
 
         <div class="file-info">
             <strong>📱 APK Information</strong><br>
-            <strong>Release Version:</strong> RL-Sideswipe-Access-v2.19-TENSORFLOW-LITE-ACTIVE-release.apk<br>
+            <strong>Release Version:</strong> RL-Sideswipe-Access-v2.20-COORDINATE-SCALING-FIXED-release.apk<br>
             Size: 56 MB (Optimized)<br>
-            <strong>Debug Version:</strong> RL-Sideswipe-Access-v2.19-TENSORFLOW-LITE-ACTIVE-debug.apk<br>
+            <strong>Debug Version:</strong> RL-Sideswipe-Access-v2.20-COORDINATE-SCALING-FIXED-debug.apk<br>
             Size: 105 MB (With debugging symbols)<br>
             Target: Android 7.0+ (API 24+)
         </div>
 
         <div class="download-section">
-            <a href="download/RL-Sideswipe-Access-v2.19-TENSORFLOW-LITE-ACTIVE-release.apk" class="download-btn" download>
+            <a href="download/RL-Sideswipe-Access-v2.20-COORDINATE-SCALING-FIXED-release.apk" class="download-btn" download>
                 📱 Download Release APK (56 MB)
             </a>
             <br><br>
-            <a href="download/RL-Sideswipe-Access-v2.19-TENSORFLOW-LITE-ACTIVE-debug.apk" class="download-btn" download style="background: #6c757d;">
+            <a href="download/RL-Sideswipe-Access-v2.20-COORDINATE-SCALING-FIXED-debug.apk" class="download-btn" download style="background: #6c757d;">
                 🔧 Download Debug APK (105 MB)
             </a>
         </div>
@@ -210,17 +210,17 @@
         </div>
 
         <div class="warning" style="background: #e8f5e8; border-left: 4px solid #28a745;">
-            <strong>🔍 v2.19 Testing Instructions:</strong><br>
-            • Install v2.19 APK and start the service<br>
+            <strong>🎯 v2.20 Testing Instructions:</strong><br>
+            • Install v2.20 APK and start the service<br>
             • Check logcat for "TFLiteInferenceEngine" messages<br>
-            • Look for "🤖 Using inference engine: TFLiteInferenceEngine" in logs<br>
-            • Ball detection should now show red circles around detected balls<br>
+            • Look for "🎯 SCALED DETECTION" and "📏 SCALING" messages in logs<br>
+            • Red circles should now properly appear around detected balls<br>
             • Use command: <code>adb logcat -s ScreenCaptureService TFLiteInferenceEngine</code>
         </div>
 
         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 0.9em;">
-            <strong>🎮 TensorFlow Lite Ball Detection Active</strong><br>
-            The critical issue has been fixed - service now properly uses AI inference instead of template matching.
+            <strong>🎯 Coordinate Scaling Bug Fixed</strong><br>
+            The coordinate scaling issue has been resolved - red circles should now properly appear around detected balls.
         </div>
     </div>
 </body>
