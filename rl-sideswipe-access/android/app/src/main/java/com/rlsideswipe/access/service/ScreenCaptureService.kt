@@ -491,37 +491,39 @@ class ScreenCaptureService : Service() {
             
             Log.d(TAG, "🔍 DETECTION RESULTS: ${templateMatches.size} template matches found")
             
-            // 🧪 ALWAYS show test overlay points for debugging
-            val testPoints = listOf(
-                PredictionOverlayService.PredictionPoint(screenWidth * 0.1f, screenHeight * 0.1f, 0f),
-                PredictionOverlayService.PredictionPoint(screenWidth * 0.5f, screenHeight * 0.5f, 1f),
-                PredictionOverlayService.PredictionPoint(screenWidth * 0.9f, screenHeight * 0.9f, 2f)
-            )
-            Log.d(TAG, "🧪 ALWAYS sending test points: screen ${screenWidth}x${screenHeight}")
-            testPoints.forEach { point ->
-                Log.d(TAG, "🧪 Test point: (${point.x}, ${point.y})")
-            }
-            PredictionOverlayService.updatePredictions(testPoints)
-            
-            // 🎯 IMMEDIATE OVERLAY UPDATE: Show template matches right away!
+            // 🎯 OVERLAY UPDATE: Show template matches or test points
             if (templateMatches.isNotEmpty()) {
-                Log.d(TAG, "🎯 IMMEDIATE OVERLAY UPDATE: ${templateMatches.size} template matches found!")
+                Log.d(TAG, "🎯 TEMPLATE MATCHES FOUND: ${templateMatches.size} matches - showing ball detection points")
                 templateMatches.forEachIndexed { index, match ->
                     Log.d(TAG, "🎯 Match #${index+1}: (${match.x.toInt()}, ${match.y.toInt()}) confidence=${String.format("%.3f", match.confidence)}")
                 }
                 
-                val overlayPoints = templateMatches.map { match ->
+                // Combine template matches with test points for debugging
+                val overlayPoints = mutableListOf<PredictionOverlayService.PredictionPoint>()
+                
+                // Add template matches as ball detection points (time=0f)
+                overlayPoints.addAll(templateMatches.map { match ->
                     PredictionOverlayService.PredictionPoint(match.x, match.y, 0f)
-                }
+                })
+                
+                // Add test points for reference (time=1f for center, 2f for corners)
+                overlayPoints.add(PredictionOverlayService.PredictionPoint(screenWidth * 0.1f, screenHeight * 0.1f, 2f))
+                overlayPoints.add(PredictionOverlayService.PredictionPoint(screenWidth * 0.5f, screenHeight * 0.5f, 1f))
+                overlayPoints.add(PredictionOverlayService.PredictionPoint(screenWidth * 0.9f, screenHeight * 0.9f, 2f))
+                
                 PredictionOverlayService.updatePredictions(overlayPoints)
             } else {
-                Log.d(TAG, "❌ NO TEMPLATE MATCHES - sending test overlay points for debugging")
-                // Send test points even when no ball detected to verify overlay works
+                Log.d(TAG, "❌ NO TEMPLATE MATCHES - showing test overlay points for debugging")
+                // Send test points to verify overlay works (time=1f for center, 2f for corners)
                 val testPoints = listOf(
-                    PredictionOverlayService.PredictionPoint(screenWidth * 0.1f, screenHeight * 0.1f, 0f),
+                    PredictionOverlayService.PredictionPoint(screenWidth * 0.1f, screenHeight * 0.1f, 2f),
                     PredictionOverlayService.PredictionPoint(screenWidth * 0.5f, screenHeight * 0.5f, 1f),
                     PredictionOverlayService.PredictionPoint(screenWidth * 0.9f, screenHeight * 0.9f, 2f)
                 )
+                Log.d(TAG, "🧪 Sending test points: screen ${screenWidth}x${screenHeight}")
+                testPoints.forEach { point ->
+                    Log.d(TAG, "🧪 Test point: (${point.x}, ${point.y}) time=${point.time}")
+                }
                 PredictionOverlayService.updatePredictions(testPoints)
             }
             
@@ -1273,9 +1275,21 @@ class ScreenCaptureService : Service() {
             predictionOverlayService = Intent(this, PredictionOverlayService::class.java)
             startService(predictionOverlayService)
             
-            // Pass screen info to overlay service for coordinate transformation
-            Log.d(TAG, "📡 Passing screen info to overlay: ${screenWidth}x${screenHeight}, landscape: $isLandscapeMode")
-            PredictionOverlayService.updateScreenInfo(screenWidth, screenHeight, isLandscapeMode)
+            // Wait a moment for service to initialize
+            Handler(Looper.getMainLooper()).postDelayed({
+                // Pass screen info to overlay service for coordinate transformation
+                Log.d(TAG, "📡 Passing screen info to overlay: ${screenWidth}x${screenHeight}, landscape: $isLandscapeMode")
+                PredictionOverlayService.updateScreenInfo(screenWidth, screenHeight, isLandscapeMode)
+                
+                // Send immediate test points to verify overlay is working
+                val testPoints = listOf(
+                    PredictionOverlayService.PredictionPoint(screenWidth * 0.1f, screenHeight * 0.1f, 0f),
+                    PredictionOverlayService.PredictionPoint(screenWidth * 0.5f, screenHeight * 0.5f, 1f),
+                    PredictionOverlayService.PredictionPoint(screenWidth * 0.9f, screenHeight * 0.9f, 2f)
+                )
+                Log.d(TAG, "🧪 STARTUP: Sending initial test points to verify overlay")
+                PredictionOverlayService.updatePredictions(testPoints)
+            }, 500) // 500ms delay to ensure service is ready
             
             Log.d(TAG, "Prediction overlay service started with screen info: ${screenWidth}x${screenHeight}, landscape: $isLandscapeMode")
         } catch (e: Exception) {

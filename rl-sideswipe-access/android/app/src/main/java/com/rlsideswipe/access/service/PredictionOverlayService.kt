@@ -1,6 +1,6 @@
 package com.rlsideswipe.access.service
 
-import android.app.Service
+import android.app.*
 import android.content.Intent
 import android.graphics.*
 import android.os.Build
@@ -10,11 +10,15 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
+import androidx.core.app.NotificationCompat
+import com.rlsideswipe.access.R
 
 class PredictionOverlayService : Service() {
     
     companion object {
         private const val TAG = "PredictionOverlay"
+        private const val CHANNEL_ID = "prediction_overlay_channel"
+        private const val NOTIFICATION_ID = 2
         private var instance: PredictionOverlayService? = null
         
         fun updatePredictions(predictions: List<PredictionPoint>) {
@@ -39,7 +43,14 @@ class PredictionOverlayService : Service() {
         super.onCreate()
         instance = this
         Log.d(TAG, "PredictionOverlayService created")
+        createNotificationChannel()
+        startForeground(NOTIFICATION_ID, createNotification())
         createOverlay()
+    }
+    
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "PredictionOverlayService onStartCommand")
+        return START_STICKY // Restart if killed
     }
     
     override fun onDestroy() {
@@ -47,6 +58,31 @@ class PredictionOverlayService : Service() {
         instance = null
         Log.d(TAG, "PredictionOverlayService destroyed")
         removeOverlay()
+    }
+    
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Prediction Overlay",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Shows ball prediction overlay"
+            }
+            
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+    
+    private fun createNotification(): Notification {
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Ball Prediction Overlay")
+            .setContentText("Displaying ball trajectory predictions")
+            .setSmallIcon(R.drawable.ic_notification)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .build()
     }
     
     private fun createOverlay() {
@@ -134,8 +170,16 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
     }
     
     fun updatePrediction(newPredictions: List<PredictionOverlayService.PredictionPoint>) {
+        Log.d(TAG, "🎨 OVERLAY VIEW: Updating with ${newPredictions.size} predictions")
+        newPredictions.forEachIndexed { index, pred ->
+            Log.d(TAG, "🎨 OVERLAY VIEW: Point $index: (${pred.x}, ${pred.y}) time=${pred.time}")
+        }
+        
         predictions = newPredictions
-        post { invalidate() } // Redraw on UI thread
+        post { 
+            Log.d(TAG, "🎨 OVERLAY VIEW: invalidate() called - should trigger onDraw()")
+            invalidate() 
+        } // Redraw on UI thread
     }
     
     fun updateScreenInfo(width: Int, height: Int, isLandscape: Boolean) {
@@ -182,7 +226,30 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         
-        if (predictions.isEmpty()) return
+        Log.d(TAG, "🎨 OVERLAY VIEW: onDraw() called with ${predictions.size} predictions")
+        
+        // ALWAYS draw a test rectangle to verify overlay is working
+        val testPaint = Paint().apply {
+            color = Color.MAGENTA
+            style = Paint.Style.STROKE
+            strokeWidth = 8f
+        }
+        canvas.drawRect(50f, 50f, 200f, 200f, testPaint)
+        Log.d(TAG, "🎨 OVERLAY VIEW: Drew test rectangle at (50,50)-(200,200)")
+        
+        // Draw screen info for debugging
+        val textPaint = Paint().apply {
+            color = Color.WHITE
+            textSize = 40f
+            isAntiAlias = true
+        }
+        canvas.drawText("Screen: ${screenWidth}x${screenHeight}", 50f, height - 100f, textPaint)
+        canvas.drawText("Points: ${predictions.size}", 50f, height - 50f, textPaint)
+        
+        if (predictions.isEmpty()) {
+            Log.d(TAG, "🎨 OVERLAY VIEW: No predictions to draw, but test elements should be visible")
+            return
+        }
         
         try {
             // Draw current ball position indicator (large circle for debugging)
