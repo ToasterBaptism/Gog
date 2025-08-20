@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RL Sideswipe Access v2.17 ENHANCED - Download</title>
+    <title>RL Sideswipe Access v2.19 TENSORFLOW-LITE-ACTIVE - Download</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -137,18 +137,18 @@
     <div class="container">
         <div class="header">
             <div class="title">🎯 RL Sideswipe Access</div>
-            <div class="version">v2.17 ENHANCED</div>
+            <div class="version">v2.19 TENSORFLOW-LITE-ACTIVE</div>
         </div>
 
         <div class="features">
-            <h3>🚀 Major Enhancements</h3>
+            <h3>🚀 Critical Fix - TensorFlow Lite ACTIVE</h3>
             <ul>
-                <li>Fixed visual feedback overlay system</li>
-                <li>Real-time detection statistics display</li>
-                <li>Improved ball detection sensitivity (65% threshold)</li>
-                <li>Enhanced debugging with detailed logs</li>
-                <li>Test overlay points for troubleshooting</li>
-                <li>Comprehensive performance monitoring</li>
+                <li>🤖 <strong>TensorFlow Lite Restored:</strong> AI ball detection now properly active</li>
+                <li>🎯 <strong>Ball Detection Fixed:</strong> Service now uses ML inference instead of template matching</li>
+                <li>📊 <strong>Enhanced Debugging:</strong> Comprehensive logging for detection analysis</li>
+                <li>⚡ <strong>Lower Threshold:</strong> Reduced confidence threshold from 65% to 25% for better detection</li>
+                <li>🔍 <strong>Detailed Logging:</strong> Added inference engine status and detection metrics</li>
+                <li>🛠️ <strong>Proper Integration:</strong> Fixed service to actually use TensorFlow Lite model</li>
             </ul>
         </div>
 
@@ -184,15 +184,20 @@
 
         <div class="file-info">
             <strong>📱 APK Information</strong><br>
-            File: RL-Sideswipe-Access-v2.17-ENHANCED.apk<br>
-            Size: 51.3 MB<br>
-            Build: Release (Optimized)<br>
+            <strong>Release Version:</strong> RL-Sideswipe-Access-v2.19-TENSORFLOW-LITE-ACTIVE-release.apk<br>
+            Size: 56 MB (Optimized)<br>
+            <strong>Debug Version:</strong> RL-Sideswipe-Access-v2.19-TENSORFLOW-LITE-ACTIVE-debug.apk<br>
+            Size: 105 MB (With debugging symbols)<br>
             Target: Android 7.0+ (API 24+)
         </div>
 
         <div class="download-section">
-            <a href="RL-Sideswipe-Access-v2.17-ENHANCED.apk" class="download-btn" download>
-                📱 Download APK (51.3 MB)
+            <a href="download/RL-Sideswipe-Access-v2.19-TENSORFLOW-LITE-ACTIVE-release.apk" class="download-btn" download>
+                📱 Download Release APK (56 MB)
+            </a>
+            <br><br>
+            <a href="download/RL-Sideswipe-Access-v2.19-TENSORFLOW-LITE-ACTIVE-debug.apk" class="download-btn" download style="background: #6c757d;">
+                🔧 Download Debug APK (105 MB)
             </a>
         </div>
 
@@ -204,9 +209,18 @@
             • Use statistics display to monitor detection performance
         </div>
 
+        <div class="warning" style="background: #e8f5e8; border-left: 4px solid #28a745;">
+            <strong>🔍 v2.19 Testing Instructions:</strong><br>
+            • Install v2.19 APK and start the service<br>
+            • Check logcat for "TFLiteInferenceEngine" messages<br>
+            • Look for "🤖 Using inference engine: TFLiteInferenceEngine" in logs<br>
+            • Ball detection should now show red circles around detected balls<br>
+            • Use command: <code>adb logcat -s ScreenCaptureService TFLiteInferenceEngine</code>
+        </div>
+
         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 0.9em;">
-            <strong>🎮 Ready for Rocket League Sideswipe Testing</strong><br>
-            All visual feedback issues have been addressed with comprehensive debugging tools.
+            <strong>🎮 TensorFlow Lite Ball Detection Active</strong><br>
+            The critical issue has been fixed - service now properly uses AI inference instead of template matching.
         </div>
     </div>
 </body>

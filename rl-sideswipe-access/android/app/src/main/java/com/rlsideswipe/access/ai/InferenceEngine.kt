@@ -41,7 +41,7 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
         private const val TAG = "TFLiteInferenceEngine"
         private const val MODEL_FILE = "rl_sideswipe_ball_v1.tflite"
         private const val INPUT_SIZE = 416 // Model input size
-        private const val CONFIDENCE_THRESHOLD = 0.65f
+        private const val CONFIDENCE_THRESHOLD = 0.25f // Lowered from 0.65 for better detection
     }
     
     private var interpreter: Interpreter? = null
@@ -129,9 +129,11 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
     override fun infer(frame: Bitmap): FrameResult {
         val startTime = System.nanoTime()
         
+        Log.d(TAG, "🔍 INFER: Starting inference on ${frame.width}x${frame.height} frame")
+        
         try {
             if (interpreter == null || inputBuffer == null || outputBuffer == null) {
-                Log.w(TAG, "⚠️ Inference engine not properly initialized")
+                Log.w(TAG, "⚠️ Inference engine not properly initialized - interpreter=${interpreter != null}, inputBuffer=${inputBuffer != null}, outputBuffer=${outputBuffer != null}")
                 return FrameResult(null, startTime)
             }
             
@@ -188,16 +190,27 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
         
         var bestDetection: Detection? = null
         var bestConfidence = 0f
+        var totalDetections = 0
+        var validDetections = 0
+        
+        Log.d(TAG, "🔍 POSTPROCESSING: Starting analysis of ${output[0].size} detections")
         
         // Parse YOLO output format
         for (i in output[0].indices) {
             val detection = output[0][i]
+            totalDetections++
             
             if (detection.size >= 85) {
                 // YOLO format: [cx, cy, w, h, objectness, class0, class1, ...]
                 val objectness = detection[4]
                 
+                // Log first few detections for debugging
+                if (i < 5) {
+                    Log.d(TAG, "🔍 Detection $i: objectness=$objectness (threshold=$CONFIDENCE_THRESHOLD)")
+                }
+                
                 if (objectness > CONFIDENCE_THRESHOLD) {
+                    validDetections++
                     val cx = detection[0] * INPUT_SIZE // Convert to pixel coordinates
                     val cy = detection[1] * INPUT_SIZE
                     val w = detection[2] * INPUT_SIZE
@@ -214,12 +227,21 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
                     
                     val finalConfidence = objectness * maxClassConf
                     
+                    Log.d(TAG, "🎯 Valid detection: pos=($cx,$cy) r=$r obj=$objectness class=$maxClassConf final=$finalConfidence")
+                    
                     if (finalConfidence > bestConfidence) {
                         bestConfidence = finalConfidence
                         bestDetection = Detection(cx, cy, r, finalConfidence)
                     }
                 }
             }
+        }
+        
+        Log.d(TAG, "📊 POSTPROCESSING SUMMARY: $totalDetections total, $validDetections valid (threshold=$CONFIDENCE_THRESHOLD)")
+        if (bestDetection != null) {
+            Log.d(TAG, "🎯 BEST DETECTION: pos=(${bestDetection.cx},${bestDetection.cy}) r=${bestDetection.r} conf=${bestDetection.conf}")
+        } else {
+            Log.d(TAG, "❌ NO DETECTIONS above threshold")
         }
         
         return bestDetection

@@ -1,19 +1,13 @@
 # Task List
 
-1. ✅ Implement v2.17 MediaProjection callback handling fixes
-Enhanced logging and callback handling implemented in MainActivity.kt
-2. ✅ Update version numbers to v2.17
-Updated package.json to 2.17.0 and Android build.gradle to 2.17-CALLBACK-FIX
-3. ✅ Set up multi-template system for real ball images
-Created BallTemplateManager.kt with ensemble matching, false positive filtering, and 6 sample templates
-4. ✅ Implement smart false positive filtering
-Integrated horizontal line detection, regular spacing filter, and duplicate clustering in BallTemplateManager
-5. ✅ Fix visual feedback overlay system
-Fixed overlay update calls from updatePredictionOverlay to PredictionOverlayService.updatePredictions with proper PredictionPoint format
-6. ✅ Add comprehensive debugging and statistics
-Added detailed template matching logs, detection statistics tracking, and React Native statistics display with real-time updates
-7. ✅ Lower detection threshold for better real-world performance
-Reduced SIMILARITY_THRESHOLD from 0.85f to 0.65f and added test overlay points for debugging
-8. ✅ Build and test enhanced v2.17 APK
-Successfully built RL-Sideswipe-Access-v2.17-ENHANCED.apk (51MB) with all visual feedback fixes, statistics display, and enhanced debugging
+1. ✅ Restore TensorFlow Lite implementation for ball detection
+Added TFLiteInferenceEngine class and TensorFlow Lite dependencies. Updated ScreenCaptureService to use TensorFlow Lite with fallback to stub.
+2. ✅ Build v2.18 APK with TensorFlow Lite ball detection
+Built both debug (105MB) and release (56MB) versions with proper APK naming convention
+3. 🔄 Debug why ball detection shows 0 balls found
+User reports balls not detected. Logcat shows only overlay messages, no service initialization. Need to investigate TensorFlow Lite initialization and confidence thresholds.
+4. ⏳ Test ball detection functionality with TensorFlow Lite
+User needs to test v2.18 APK to verify that balls are now detected and overlay shows red circles
+5. ✅ Update download page with v2.18 APKs
+Updated download page with v2.18 APKs, proper naming, and comprehensive debugging instructions
 

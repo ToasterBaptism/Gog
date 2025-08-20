@@ -365,11 +365,12 @@ class ScreenCaptureService : Service() {
         val startTime = System.nanoTime()
         
         try {
-            // Simple and safe frame processing
+            // AI-powered frame processing with TensorFlow Lite
             val bitmap = convertImageToBitmapSafely(image)
             if (bitmap != null) {
-                // Simple ball detection instead of complex AI
-                val ballDetection = detectBallSimple(bitmap)
+                // Use TensorFlow Lite inference engine for ball detection
+                Log.d(TAG, "🤖 Using inference engine: ${inferenceEngine?.javaClass?.simpleName}")
+                val ballDetection = inferenceEngine?.infer(bitmap)
                 
                 if (ballDetection != null) {
                     // Post results on main thread
