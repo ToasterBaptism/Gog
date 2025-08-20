@@ -267,8 +267,23 @@ class ScreenCaptureService : Service() {
         backgroundHandler?.post {
             try {
                 Log.d(TAG, "Initializing AI components...")
-                // Use stub inference engine unconditionally (TF Lite dependency removed)
-                inferenceEngine = StubInferenceEngine()
+
+                val useTfLite = try { com.rlsideswipe.access.BuildConfig.FLAVOR?.contains("tflite") == true } catch (e: Exception) { false }
+
+                inferenceEngine = if (useTfLite) {
+                    try {
+                        val cls = Class.forName("com.rlsideswipe.access.ai.TFLiteInferenceEngine")
+                        val ctor = cls.getConstructor(android.content.Context::class.java)
+                        val engine = ctor.newInstance(applicationContext) as InferenceEngine
+                        Log.i(TAG, "TFLiteInferenceEngine instantiated")
+                        engine
+                    } catch (e: Throwable) {
+                        Log.e(TAG, "Failed to instantiate TFLiteInferenceEngine, falling back to stub", e)
+                        StubInferenceEngine()
+                    }
+                } else {
+                    StubInferenceEngine()
+                }
                 
                 // Initialize trajectory predictor
                 trajectoryPredictor = try {
@@ -283,14 +298,13 @@ class ScreenCaptureService : Service() {
                 // Warmup inference engine
                 try {
                     inferenceEngine?.warmup()
-                    Log.i(TAG, "AI components initialized and warmed up successfully")
+                    Log.i(TAG, "AI components initialized and warmed up successfully with ${inferenceEngine?.javaClass?.simpleName}")
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to warmup inference engine: ${e.message}", e)
                 }
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to initialize AI components", e)
-                // Continue without AI - service will still capture but won't process
             }
         }
     }
