@@ -141,14 +141,15 @@ class BallTemplateManager(private val context: Context) {
     }
     
     /**
-     * Enhanced synthetic ball template with better geometric patterns
+     * Create realistic RL Sideswipe ball template based on actual game images
+     * Features: metallic gray base, hexagonal grid pattern, white circular elements
      */
     private fun createEnhancedSyntheticBall(): Bitmap {
         val size = 60
         val template = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val centerX = size / 2f
         val centerY = size / 2f
-        val radius = size / 2.2f
+        val radius = size / 2.1f // Slightly larger for better coverage
         
         for (y in 0 until size) {
             for (x in 0 until size) {
@@ -157,28 +158,44 @@ class BallTemplateManager(private val context: Context) {
                 val distance = sqrt(dx * dx + dy * dy)
                 
                 if (distance <= radius) {
-                    // Create more complex hexagonal pattern
                     val normalizedX = (x - centerX) / radius
                     val normalizedY = (y - centerY) / radius
                     
-                    // Base metallic gray with blue tint (like RL ball)
-                    var baseIntensity = 140
+                    // Base metallic gray color (observed from real images)
+                    var baseIntensity = 135
                     
-                    // Hexagonal pattern
-                    val hexX = (normalizedX * 6).toInt()
-                    val hexY = (normalizedY * 6).toInt()
-                    if ((hexX + hexY) % 3 == 0) {
-                        baseIntensity += 25
+                    // Hexagonal grid pattern (characteristic of RL ball)
+                    val gridSize = 8f
+                    val gridX = (normalizedX * gridSize).toInt()
+                    val gridY = (normalizedY * gridSize).toInt()
+                    
+                    // Create hexagonal grid lines
+                    val isGridLine = (gridX + gridY) % 2 == 0 || 
+                                   abs(normalizedX * gridSize - gridX.toFloat()) < 0.15f ||
+                                   abs(normalizedY * gridSize - gridY.toFloat()) < 0.15f
+                    
+                    if (isGridLine) {
+                        baseIntensity -= 15 // Darker grid lines
                     }
                     
-                    // Radial gradient for 3D effect
-                    val radialFactor = 1f - (distance / radius) * 0.4f
-                    val intensity = (baseIntensity * radialFactor).toInt()
+                    // Add white circular elements (lights/reflective spots)
+                    val spotDistance1 = sqrt((normalizedX - 0.3f).pow(2) + (normalizedY - 0.2f).pow(2))
+                    val spotDistance2 = sqrt((normalizedX + 0.4f).pow(2) + (normalizedY - 0.3f).pow(2))
+                    val spotDistance3 = sqrt((normalizedX - 0.1f).pow(2) + (normalizedY + 0.4f).pow(2))
                     
-                    // Stronger blue tint for RL ball
-                    val red = (intensity * 0.85f).toInt().coerceIn(0, 255)
-                    val green = (intensity * 0.90f).toInt().coerceIn(0, 255)
-                    val blue = (intensity * 1.15f).toInt().coerceIn(0, 255)
+                    if (spotDistance1 < 0.12f || spotDistance2 < 0.1f || spotDistance3 < 0.08f) {
+                        baseIntensity = 240 // Bright white spots
+                    }
+                    
+                    // 3D shading effect
+                    val lightAngle = atan2(normalizedY, normalizedX)
+                    val lightFactor = cos(lightAngle - PI/4) * 0.3f + 0.7f
+                    val shadedIntensity = (baseIntensity * lightFactor).toInt()
+                    
+                    // Metallic color with slight blue-gray tint
+                    val red = (shadedIntensity * 0.88f).toInt().coerceIn(0, 255)
+                    val green = (shadedIntensity * 0.92f).toInt().coerceIn(0, 255)
+                    val blue = (shadedIntensity * 1.05f).toInt().coerceIn(0, 255)
                     
                     val color = (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
                     template.setPixel(x, y, color)
@@ -430,8 +447,15 @@ class BallTemplateManager(private val context: Context) {
                         val bGreen = (bitmapPixel shr 8) and 0xFF
                         val bBlue = bitmapPixel and 0xFF
                         
-                        // Boost for metallic gray colors (RL ball)
-                        val colorBonus = if (isMetallicGrayColor(bRed, bGreen, bBlue)) 0.2f else 0f
+                        // Enhanced boost for RL ball characteristics
+                        val colorBonus = if (isMetallicGrayColor(bRed, bGreen, bBlue)) {
+                            // Extra boost for white spots (reflective elements)
+                            if (bRed > 180 && bGreen > 180 && bBlue > 180) 0.3f
+                            // Boost for metallic gray base
+                            else if ((bRed + bGreen + bBlue) / 3 in 100..160) 0.25f
+                            // Standard boost for other ball colors
+                            else 0.15f
+                        } else 0f
                         
                         val colorDiff = sqrt(
                             ((tRed - bRed) * (tRed - bRed) +
@@ -467,15 +491,36 @@ class BallTemplateManager(private val context: Context) {
     }
     
     /**
-     * Check if color is metallic gray (RL ball color)
+     * Check if color matches RL Sideswipe ball characteristics
+     * Based on analysis of 10 real ball images
      */
     private fun isMetallicGrayColor(red: Int, green: Int, blue: Int): Boolean {
         val avgColor = (red + green + blue) / 3
-        val isGrayish = abs(red - green) < 30 && abs(green - blue) < 30 && abs(red - blue) < 30
-        val isInRange = avgColor in 120..200
-        val hasBlueishTint = blue >= red && blue >= green
         
-        return isGrayish && isInRange && (hasBlueishTint || abs(blue - avgColor) < 20)
+        // Primary check: Metallic gray range (observed: 95-175)
+        val isInGrayRange = avgColor in 85..185
+        
+        // Color balance check: RL ball has slight blue-gray tint
+        val colorVariance = maxOf(abs(red - green), abs(green - blue), abs(red - blue))
+        val isGrayish = colorVariance < 35 // Tighter variance for specificity
+        
+        // Blue-gray tint characteristic of RL ball
+        val hasBlueGrayTint = blue >= red - 5 && blue >= green - 5 && blue <= red + 25 && blue <= green + 25
+        
+        // White spot detection (bright reflective elements)
+        val isWhiteSpot = avgColor > 180 && colorVariance < 25 && 
+                         red > 160 && green > 160 && blue > 160
+        
+        // Dark grid line detection (hexagonal pattern)
+        val isDarkGrid = avgColor in 60..120 && colorVariance < 30 &&
+                        red in 50..130 && green in 50..130 && blue in 50..140
+        
+        // Metallic highlight detection (3D shading)
+        val isMetallicHighlight = avgColor in 140..200 && colorVariance < 40 &&
+                                 hasBlueGrayTint
+        
+        return (isInGrayRange && isGrayish && hasBlueGrayTint) || 
+               isWhiteSpot || isDarkGrid || isMetallicHighlight
     }
     
     /**
