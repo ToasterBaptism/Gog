@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RL Sideswipe Access v2.20 COORDINATE-SCALING-FIXED - Download</title>
+    <title>RL Sideswipe Access v2.21 OPENCV-ENHANCED - Download</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -137,18 +137,19 @@
     <div class="container">
         <div class="header">
             <div class="title">🎯 RL Sideswipe Access</div>
-            <div class="version">v2.20 COORDINATE-SCALING-FIXED</div>
+            <div class="version">v2.21 OPENCV-ENHANCED</div>
         </div>
 
         <div class="features">
-            <h3>🎯 Critical Fix - Coordinate Scaling Bug Fixed</h3>
+            <h3>🔬 Major Enhancement - OpenCV Image Processing</h3>
             <ul>
-                <li>✅ <strong>Coordinate Scaling Fixed:</strong> Red circles now properly appear around detected balls</li>
-                <li>🔄 <strong>Superior Implementation:</strong> Restored backup version with proper cx, cy, r scaling</li>
-                <li>📐 <strong>Model Input Corrected:</strong> Fixed input size from 416x416 to correct 320x320</li>
-                <li>🎯 <strong>Simplified Output:</strong> Uses [x, y, w, h, confidence] format instead of complex YOLO parsing</li>
-                <li>🪟 <strong>Hanning Window:</strong> Added preprocessing to reduce edge artifacts</li>
-                <li>🔍 <strong>Enhanced Debugging:</strong> Detailed coordinate transformation logging</li>
+                <li>🔬 <strong>OpenCV Integration:</strong> Advanced image preprocessing with computer vision algorithms</li>
+                <li>🎯 <strong>Adaptive Processing:</strong> Automatically adjusts contrast and blur based on image characteristics</li>
+                <li>🌈 <strong>Grayscale Conversion:</strong> Removes color distractions for better ball detection</li>
+                <li>✨ <strong>Contrast Enhancement:</strong> Dynamically enhances contrast based on brightness (1.1x-1.8x)</li>
+                <li>🌊 <strong>Gaussian Blur:</strong> Adaptive noise reduction with smart blur radius (1.0-2.0px)</li>
+                <li>📊 <strong>Quality Analysis:</strong> Real-time sharpness and brightness analysis with logging</li>
+                <li>🔄 <strong>Coordinate Scaling:</strong> Maintains proper cx, cy, r transformation from v2.20</li>
             </ul>
         </div>
 
@@ -184,19 +185,19 @@
 
         <div class="file-info">
             <strong>📱 APK Information</strong><br>
-            <strong>Release Version:</strong> RL-Sideswipe-Access-v2.20-COORDINATE-SCALING-FIXED-release.apk<br>
+            <strong>Release Version:</strong> RL-Sideswipe-Access-v2.21-OPENCV-ENHANCED-release.apk<br>
             Size: 56 MB (Optimized)<br>
-            <strong>Debug Version:</strong> RL-Sideswipe-Access-v2.20-COORDINATE-SCALING-FIXED-debug.apk<br>
+            <strong>Debug Version:</strong> RL-Sideswipe-Access-v2.21-OPENCV-ENHANCED-debug.apk<br>
             Size: 105 MB (With debugging symbols)<br>
             Target: Android 7.0+ (API 24+)
         </div>
 
         <div class="download-section">
-            <a href="download/RL-Sideswipe-Access-v2.20-COORDINATE-SCALING-FIXED-release.apk" class="download-btn" download>
+            <a href="download/RL-Sideswipe-Access-v2.21-OPENCV-ENHANCED-release.apk" class="download-btn" download>
                 📱 Download Release APK (56 MB)
             </a>
             <br><br>
-            <a href="download/RL-Sideswipe-Access-v2.20-COORDINATE-SCALING-FIXED-debug.apk" class="download-btn" download style="background: #6c757d;">
+            <a href="download/RL-Sideswipe-Access-v2.21-OPENCV-ENHANCED-debug.apk" class="download-btn" download style="background: #6c757d;">
                 🔧 Download Debug APK (105 MB)
             </a>
         </div>
@@ -210,17 +211,18 @@
         </div>
 
         <div class="warning" style="background: #e8f5e8; border-left: 4px solid #28a745;">
-            <strong>🎯 v2.20 Testing Instructions:</strong><br>
-            • Install v2.20 APK and start the service<br>
-            • Check logcat for "TFLiteInferenceEngine" messages<br>
-            • Look for "🎯 SCALED DETECTION" and "📏 SCALING" messages in logs<br>
-            • Red circles should now properly appear around detected balls<br>
-            • Use command: <code>adb logcat -s ScreenCaptureService TFLiteInferenceEngine</code>
+            <strong>🔬 v2.21 Testing Instructions:</strong><br>
+            • Install v2.21 APK and start the service<br>
+            • Check logcat for "TFLiteInferenceEngine" and "OpenCVUtils" messages<br>
+            • Look for "🔄 Starting advanced preprocessing" and "📊 PREPROCESSING QUALITY ANALYSIS" in logs<br>
+            • Monitor adaptive processing: "🔍 Image analysis - Brightness: X, Sharpness: Y"<br>
+            • Red circles should appear with improved accuracy due to OpenCV preprocessing<br>
+            • Use command: <code>adb logcat -s ScreenCaptureService TFLiteInferenceEngine OpenCVUtils</code>
         </div>
 
         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 0.9em;">
-            <strong>🎯 Coordinate Scaling Bug Fixed</strong><br>
-            The coordinate scaling issue has been resolved - red circles should now properly appear around detected balls.
+            <strong>🔬 OpenCV Enhanced Ball Detection</strong><br>
+            Advanced computer vision preprocessing now optimizes images for better ball detection accuracy.
         </div>
     </div>
 </body>

@@ -20,7 +20,7 @@ import java.nio.ByteOrder
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 import kotlin.math.*
-// import com.rlsideswipe.access.util.OpenCVUtils // Not available
+import com.rlsideswipe.access.util.OpenCVUtils
 
 data class Detection(
     val cx: Float,
@@ -203,8 +203,13 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
                 return FrameResult(null, timestampNanos)
             }
             
-            // Preprocess the frame
+            // Preprocess the frame with quality analysis
             val preprocessedBitmap = preprocessFrame(frame)
+            
+            // Log preprocessing quality metrics (every 30 frames to avoid spam)
+            if (System.currentTimeMillis() % 30000 < 100) { // Roughly every 30 seconds
+                logPreprocessingQuality(frame, preprocessedBitmap)
+            }
             
             // Convert bitmap to input buffer
             bitmapToBuffer(preprocessedBitmap, inputBuffer)
@@ -240,11 +245,30 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
     }
     
     private fun preprocessFrame(frame: Bitmap): Bitmap {
-        // 1. Basic preprocessing - resize to model input size
-        val scaledBitmap = Bitmap.createScaledBitmap(frame, INPUT_SIZE, INPUT_SIZE, true)
-        
-        // 2. Apply Hanning window to reduce edge artifacts
-        return applyHanningWindow(scaledBitmap)
+        try {
+            Log.d(TAG, "🔄 Starting advanced preprocessing with OpenCV-style operations")
+            
+            // 1. Apply adaptive OpenCV-style preprocessing for better ball detection
+            val preprocessed = OpenCVUtils.adaptivePreprocessForDetection(frame)
+            Log.d(TAG, "✅ Adaptive OpenCV preprocessing complete: grayscale + adaptive contrast + adaptive blur")
+            
+            // 2. Resize to model input size while maintaining preprocessing benefits
+            val scaledBitmap = Bitmap.createScaledBitmap(preprocessed, INPUT_SIZE, INPUT_SIZE, true)
+            preprocessed.recycle() // Clean up intermediate bitmap
+            
+            // 3. Apply Hanning window to reduce edge artifacts (additional enhancement)
+            val result = applyHanningWindow(scaledBitmap)
+            scaledBitmap.recycle() // Clean up intermediate bitmap
+            
+            Log.d(TAG, "🎯 Advanced preprocessing pipeline complete")
+            return result
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error in advanced preprocessing, falling back to basic", e)
+            // Fallback to basic preprocessing if OpenCV processing fails
+            val scaledBitmap = Bitmap.createScaledBitmap(frame, INPUT_SIZE, INPUT_SIZE, true)
+            return applyHanningWindow(scaledBitmap)
+        }
     }
     
     private fun applyHanningWindow(bitmap: Bitmap): Bitmap {
@@ -339,6 +363,38 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
         hanningWindow = null
         
         Log.d(TAG, "🔒 Inference engine closed")
+    }
+    
+    /**
+     * Log preprocessing quality metrics to help analyze the effectiveness of OpenCV operations
+     */
+    private fun logPreprocessingQuality(original: Bitmap, processed: Bitmap) {
+        try {
+            // Calculate sharpness for both images
+            val originalSharpness = OpenCVUtils.calculateSharpness(original)
+            val processedSharpness = OpenCVUtils.calculateSharpness(processed)
+            
+            // Calculate improvement ratio
+            val sharpnessRatio = if (originalSharpness > 0) processedSharpness / originalSharpness else 0f
+            
+            Log.i(TAG, "📊 PREPROCESSING QUALITY ANALYSIS:")
+            Log.i(TAG, "   📐 Original size: ${original.width}x${original.height}")
+            Log.i(TAG, "   📐 Processed size: ${processed.width}x${processed.height}")
+            Log.i(TAG, "   🔍 Original sharpness: %.2f".format(originalSharpness))
+            Log.i(TAG, "   🔍 Processed sharpness: %.2f".format(processedSharpness))
+            Log.i(TAG, "   📈 Sharpness ratio: %.2fx".format(sharpnessRatio))
+            
+            if (sharpnessRatio > 1.1f) {
+                Log.i(TAG, "   ✅ Preprocessing IMPROVED image quality")
+            } else if (sharpnessRatio < 0.9f) {
+                Log.w(TAG, "   ⚠️ Preprocessing may have REDUCED image quality")
+            } else {
+                Log.i(TAG, "   ➡️ Preprocessing maintained image quality")
+            }
+            
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to calculate preprocessing quality metrics", e)
+        }
     }
 }
 

@@ -225,7 +225,71 @@ object OpenCVUtils {
     }
     
     /**
-     * Preprocess image for better ball detection
+     * Calculate average brightness of an image
+     */
+    fun calculateBrightness(bitmap: Bitmap): Float {
+        val width = bitmap.width
+        val height = bitmap.height
+        val pixels = IntArray(width * height)
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+        
+        var totalBrightness = 0.0
+        for (pixel in pixels) {
+            val r = (pixel shr 16) and 0xFF
+            val g = (pixel shr 8) and 0xFF
+            val b = pixel and 0xFF
+            // Use luminance formula
+            totalBrightness += (0.299 * r + 0.587 * g + 0.114 * b)
+        }
+        
+        return (totalBrightness / pixels.size).toFloat()
+    }
+    
+    /**
+     * Adaptive preprocessing that adjusts based on image characteristics
+     */
+    fun adaptivePreprocessForDetection(bitmap: Bitmap): Bitmap {
+        try {
+            // Analyze image characteristics
+            val brightness = calculateBrightness(bitmap)
+            val sharpness = calculateSharpness(bitmap)
+            
+            Log.d(TAG, "🔍 Image analysis - Brightness: %.1f, Sharpness: %.1f".format(brightness, sharpness))
+            
+            // 1. Convert to grayscale
+            val grayscale = toGrayscale(bitmap)
+            
+            // 2. Adaptive contrast enhancement based on brightness
+            val contrastFactor = when {
+                brightness < 80 -> 1.8f  // Dark image - more contrast
+                brightness > 180 -> 1.1f // Bright image - less contrast
+                else -> 1.3f             // Normal image - standard contrast
+            }
+            
+            val enhanced = enhanceContrast(grayscale, contrastFactor)
+            grayscale.recycle()
+            
+            // 3. Adaptive blur based on sharpness
+            val blurRadius = when {
+                sharpness > 1000 -> 1.0f  // Very sharp - minimal blur
+                sharpness < 100 -> 2.0f   // Blurry - more blur to smooth noise
+                else -> 1.5f              // Normal - standard blur
+            }
+            
+            val blurred = gaussianBlur(enhanced, blurRadius)
+            enhanced.recycle()
+            
+            Log.d(TAG, "✅ Adaptive preprocessing: contrast=%.1fx, blur=%.1f".format(contrastFactor, blurRadius))
+            return blurred
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in adaptive preprocessing, falling back to standard", e)
+            return preprocessForDetection(bitmap)
+        }
+    }
+    
+    /**
+     * Standard preprocessing for better ball detection
      */
     fun preprocessForDetection(bitmap: Bitmap): Bitmap {
         try {
