@@ -1,4 +1,6 @@
 apply plugin: "com.android.application"
+// AI backend isolation via product flavors: 'stub' (default) and 'tflite'.
+
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
@@ -95,7 +97,17 @@ android {
     kotlinOptions {
         jvmTarget = '17'
     }
-    
+
+    flavorDimensions "aiBackend"
+    productFlavors {
+        stub {
+            dimension "aiBackend"
+        }
+        tflite {
+            dimension "aiBackend"
+        }
+    }
+
     // Configure APK naming with version
     applicationVariants.all { variant ->
         variant.outputs.all {
@@ -114,13 +126,13 @@ dependencies {
     implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.8.4"
     implementation "androidx.activity:activity-ktx:1.9.1"
     
-    // TensorFlow Lite for ball detection
-    implementation "org.tensorflow:tensorflow-lite:2.13.0"
-    implementation "org.tensorflow:tensorflow-lite-support:0.4.4"
-    
-    // MediaPipe Tasks Vision
-    implementation "com.google.mediapipe:tasks-vision:0.10.14"
-    
+    // AI backends isolated via flavors. Default 'stub' flavor includes no ML deps.
+    stubImplementation "androidx.annotation:annotation:1.8.2"
+    // Optional TF Lite/MediaPipe deps only in the 'tflite' flavor.
+    tfliteImplementation "org.tensorflow:tensorflow-lite:2.13.0"
+    tfliteImplementation "org.tensorflow:tensorflow-lite-support:0.4.4"
+    tfliteImplementation "com.google.mediapipe:tasks-vision:0.10.14"
+
     // Audio
     implementation "androidx.media:media:1.7.0"
 

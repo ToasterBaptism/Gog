@@ -1,11 +1,15 @@
 # Task List
 
-1. ✅ Restore TensorFlow Lite implementation for ball detection
-Added TFLiteInferenceEngine class and TensorFlow Lite dependencies. Updated ScreenCaptureService to use TensorFlow Lite with fallback to stub.
-2. ✅ Build v2.18 APK with TensorFlow Lite ball detection
-Built both debug (105MB) and release (56MB) versions with proper APK naming convention
-3. ⏳ Test ball detection functionality with TensorFlow Lite
-User needs to test v2.18 APK to verify that balls are now detected and overlay shows red circles
-4. ✅ Update download page with v2.18 APKs
-Updated download page with v2.18 APKs, proper naming, and comprehensive debugging instructions
+1. ✅ Fix pendingMediaProjectionResult lambda and add timeout in MainActivity.kt
+Updated to remove timeout and invoke original callback; added postDelayed to start timeout
+2. ⏳ Update version text in rl-sideswipe-access/index.html to match versionName format
+Change display to 2.21-OPENCV-ENHANCED; remove leading 'v' unless convention requires
+3. ✅ Remove TFLite imports/initialization from ScreenCaptureService and use StubInferenceEngine exclusively
+initializeAIComponents now uses StubInferenceEngine; no TF Lite imports; overlay start adjusted
+4. ✅ Move overlay start/update from onCreate to startCapture after metrics computed
+startCapture ensures overlay starts/updates after computing screenWidth/screenHeight/isLandscapeMode
+5. ✅ Make packed YUV conversion stride-safe using rowStride and pixelStride for Y/U/V
+Updated to use rowStride for packed branch in yuv420ToBitmap and yuv420PackedToBitmap index calculations
+6. 🔄 Isolate TF Lite/MediaPipe via Gradle flavors and move implementations accordingly
+Added flavors, moved deps to tfliteImplementation, split interface/stub in main and placeholder tflite class; both flavors build
 
