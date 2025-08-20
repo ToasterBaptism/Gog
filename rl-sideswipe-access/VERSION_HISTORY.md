@@ -1,6 +1,61 @@
 # RL Sideswipe Access - Version History
 
-## v2.7-LANDSCAPE-COORDINATE-FIX (Current)
+## v2.17-ENHANCED (Current)
+**Release Date:** 2025-08-20  
+**APK:** `RL-Sideswipe-Access-v2.17-ENHANCED.apk`  
+**Size:** 51.3MB  
+
+### 🎯 MAJOR VISUAL FEEDBACK FIXES
+- **Fixed Overlay System:** Corrected overlay update calls from updatePredictionOverlay to PredictionOverlayService.updatePredictions
+- **Real-time Statistics Display:** Added comprehensive detection statistics with React Native UI
+- **Enhanced Template Matching:** Implemented BallTemplateManager with 10 realistic ball templates
+- **Improved Detection Sensitivity:** Lowered threshold from 85% to 65% for better real-world performance
+- **Test Overlay Points:** Always-visible debugging points to verify overlay functionality
+- **Comprehensive Debugging:** Detailed per-template matching logs and best similarity tracking
+
+### 📊 NEW STATISTICS SYSTEM
+- **Live Performance Metrics:** Frames processed, balls detected, FPS, template count
+- **Detection Status Indicator:** Active/Standby status with color coding
+- **Last Detection Timestamp:** Shows time since last successful ball detection
+- **Reset Functionality:** One-tap statistics reset for testing scenarios
+- **Real-time Updates:** Statistics refresh every second when service is active
+
+### 🔧 TECHNICAL IMPROVEMENTS
+- **Multi-template Detection:** Ensemble matching with 10 realistic ball templates
+- **False Positive Filtering:** Advanced filtering to reduce UI element detection
+- **Enhanced Debugging Logs:** Per-template similarity scores and position logging
+- **Statistics Bridge:** Complete Android-to-React Native statistics integration
+- **Test Overlay System:** Always-visible test points for debugging overlay issues
+
+### 🔧 MEDIAPROJECTION CALLBACK FIX
+- **Fixed Race Condition:** Resolved callback overwriting bug in MainActivity.kt
+- **Proper Dialog Flow:** MediaProjection permission dialog now appears correctly
+- **Enhanced Timeout Handling:** 30-second timeout with proper callback cleanup
+- **Comprehensive Logging:** Added debugging infrastructure for callback flow
+
+### 🎯 Technical Implementation
+- **BallTemplateManager.kt:** Multi-template detection system with ensemble matching
+- **ScreenCaptureService.kt:** Statistics tracking and test overlay points
+- **NativeControlModule.kt:** Statistics bridge methods for React Native
+- **StartScreen.tsx:** Real-time statistics display with 6 key metrics
+- **Enhanced Debugging:** Per-template similarity logging and best match tracking
+
+---
+
+## v2.17-CALLBACK-FIX (Previous)
+**Release Date:** 2025-08-19  
+**APK:** `rl-sideswipe-access-v2.17-debug.apk`  
+**Size:** 140MB (Debug)  
+
+### 🔧 Critical Bug Fix
+- **MediaProjection Dialog Issue:** Fixed callback handling race condition
+- **Start Button Fix:** "Start Now" button now properly triggers permission dialog
+- **Callback Flow:** Eliminated callback overwriting after timeout setup
+- **Enhanced Logging:** Added comprehensive debugging for MediaProjection flow
+
+---
+
+## v2.7-LANDSCAPE-COORDINATE-FIX
 **Release Date:** 2025-08-19  
 **APK:** `app-release-v2.7-LANDSCAPE-COORDINATE-FIX.apk`  
 **Size:** 49MB  
