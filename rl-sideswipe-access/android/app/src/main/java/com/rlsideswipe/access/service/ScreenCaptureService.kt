@@ -1221,8 +1221,8 @@ class ScreenCaptureService : Service() {
     
     private fun predictBallTrajectory(startX: Float, startY: Float, velocityX: Float, velocityY: Float): List<PredictionPoint> {
         val predictions = mutableListOf<PredictionPoint>()
-        val screenWidth = resources.displayMetrics.widthPixels.toFloat()
-        val screenHeight = resources.displayMetrics.heightPixels.toFloat()
+        val screenWidthFloat = this.screenWidth.toFloat()
+        val screenHeightFloat = this.screenHeight.toFloat()
         
         // Physics constants for Rocket League Sideswipe
         val gravity = 800f // pixels per second squared (adjusted for mobile screen)
@@ -1237,10 +1237,10 @@ class ScreenCaptureService : Service() {
         var time = 0f
         
         // Game field boundaries (approximate for Rocket League Sideswipe)
-        val fieldLeft = screenWidth * 0.1f
-        val fieldRight = screenWidth * 0.9f
-        val fieldTop = screenHeight * 0.2f
-        val fieldBottom = screenHeight * 0.8f
+        val fieldLeft = screenWidthFloat * 0.1f
+        val fieldRight = screenWidthFloat * 0.9f
+        val fieldTop = screenHeightFloat * 0.2f
+        val fieldBottom = screenHeightFloat * 0.8f
         
         while (time < maxPredictionTime && predictions.size < 60) { // Max 60 points
             time += timeStep
@@ -1374,6 +1374,7 @@ class ScreenCaptureService : Service() {
     
     override fun onDestroy() {
         super.onDestroy()
+        stopForeground(true) // Remove persistent notification
         instance = null
         stopCapture()
         stopPredictionOverlay()

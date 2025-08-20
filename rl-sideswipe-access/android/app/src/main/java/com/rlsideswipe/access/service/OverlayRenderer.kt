@@ -2,6 +2,7 @@ package com.rlsideswipe.access.service
 
 import android.content.Context
 import android.graphics.*
+import android.os.Looper
 import android.util.AttributeSet
 import android.view.View
 import com.rlsideswipe.access.ai.Detection
@@ -52,16 +53,28 @@ class OverlayRenderer @JvmOverloads constructor(
     }
     
     fun setDetection(ball: Detection?) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            post { setDetection(ball) }
+            return
+        }
         currentBall = ball
         invalidate()
     }
     
     fun setTrajectory(trajectory: List<TrajectoryPoint>) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            post { setTrajectory(trajectory) }
+            return
+        }
         currentTrajectory = trajectory
         invalidate()
     }
     
     fun setOpacity(opacity: Float) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            post { setOpacity(opacity) }
+            return
+        }
         this.opacity = opacity.coerceIn(0f, 1f)
         updatePaintAlpha()
         invalidate()

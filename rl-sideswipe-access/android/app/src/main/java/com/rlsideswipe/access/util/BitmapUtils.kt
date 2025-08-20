@@ -135,17 +135,19 @@ object BitmapUtils {
         val pixels = IntArray(width * height)
         
         val yRowStride = yPlane.rowStride
-        val uvRowStride = uPlane.rowStride
+        val uRowStride = uPlane.rowStride
+        val vRowStride = vPlane.rowStride
         val yPixelStride = yPlane.pixelStride
-        val uvPixelStride = uPlane.pixelStride
+        val uPixelStride = uPlane.pixelStride
+        val vPixelStride = vPlane.pixelStride
         
         for (y in 0 until height) {
             for (x in 0 until width) {
                 val yIndex = y * yRowStride + x * yPixelStride
                 val uvRow = y / 2
                 val uvCol = x / 2
-                val uIndex = uvRow * uvRowStride + uvCol * uvPixelStride
-                val vIndex = uvRow * uvRowStride + uvCol * uvPixelStride
+                val uIndex = uvRow * uRowStride + uvCol * uPixelStride
+                val vIndex = uvRow * vRowStride + uvCol * vPixelStride
                 
                 val yValue = if (yIndex < yBuffer.limit()) yBuffer.get(yIndex).toInt() and 0xFF else 0
                 val uValue = if (uIndex < uBuffer.limit()) uBuffer.get(uIndex).toInt() and 0xFF else 128
