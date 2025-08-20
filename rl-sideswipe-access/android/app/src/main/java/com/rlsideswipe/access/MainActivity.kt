@@ -53,15 +53,17 @@ class MainActivity : ReactActivity() {
     }
 
     fun requestMediaProjection(callback: (Intent?) -> Unit) {
-        Log.d("MainActivity", "Requesting MediaProjection permission...")
+        Log.d("MainActivity", "=== REQUESTING MEDIA PROJECTION PERMISSION ===")
+        Log.d("MainActivity", "Callback provided: ${callback != null}")
         
         try {
             // Clear any existing pending callback first
             pendingMediaProjectionResult = null
+            Log.d("MainActivity", "Cleared existing pending callback")
             
             val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as? MediaProjectionManager
             if (mediaProjectionManager == null) {
-                Log.e("MainActivity", "MediaProjectionManager is null")
+                Log.e("MainActivity", "MediaProjectionManager is null - cannot proceed")
                 callback(null)
                 return
             }
@@ -69,15 +71,23 @@ class MainActivity : ReactActivity() {
             val captureIntent = mediaProjectionManager.createScreenCaptureIntent()
             Log.d("MainActivity", "Created screen capture intent: $captureIntent")
             
-            // Set the callback BEFORE launching the intent
-            pendingMediaProjectionResult = callback
+            // Set up the callback with enhanced logging (v2.17 fix)
+            pendingMediaProjectionResult = { result ->
+                Log.d("MainActivity", "=== MEDIA PROJECTION CALLBACK INVOKED ===")
+                Log.d("MainActivity", "MediaProjection callback invoked with result: $result")
+                Log.d("MainActivity", "Result is null: ${result == null}")
+                
+                // Use the original callback parameter directly (v2.17 fix)
+                callback(result)
+                Log.d("MainActivity", "Original callback invoked successfully")
+            }
             
-            Log.d("MainActivity", "Launching MediaProjection intent...")
+            Log.d("MainActivity", "Callback set up successfully, launching MediaProjection intent...")
             mediaProjectionLauncher.launch(captureIntent)
             Log.d("MainActivity", "MediaProjection intent launched successfully")
             
         } catch (e: Exception) {
-            Log.e("MainActivity", "Exception in requestMediaProjection", e)
+            Log.e("MainActivity", "Exception in requestMediaProjection: ${e.message}", e)
             pendingMediaProjectionResult = null
             callback(null)
         }

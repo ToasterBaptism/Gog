@@ -33,6 +33,7 @@ import com.rlsideswipe.access.ai.StubInferenceEngine
 import com.rlsideswipe.access.ai.TrajectoryPredictor
 import com.rlsideswipe.access.ai.KalmanTrajectoryPredictor
 import com.rlsideswipe.access.util.BitmapUtils
+import com.rlsideswipe.access.util.BallTemplateManager
 import kotlin.math.sqrt
 import kotlin.math.cos
 import kotlin.math.sin
@@ -61,8 +62,8 @@ class ScreenCaptureService : Service() {
     private var inferenceEngine: InferenceEngine? = null
     private var trajectoryPredictor: TrajectoryPredictor? = null
     
-    // Template matching for ball detection
-    private var ballTemplate: Bitmap? = null
+    // Multi-template ball detection system
+    private var ballTemplateManager: BallTemplateManager? = null
     
     private var backgroundThread: HandlerThread? = null
     private var backgroundHandler: Handler? = null
@@ -88,7 +89,7 @@ class ScreenCaptureService : Service() {
         super.onCreate()
         createNotificationChannel()
         setupBackgroundThread()
-        loadBallTemplate()
+        initializeBallTemplateManager()
         lastPerformanceLog = System.currentTimeMillis()
         startPredictionOverlay()
         Log.d(TAG, "ScreenCaptureService created")
@@ -466,8 +467,8 @@ class ScreenCaptureService : Service() {
             
             Log.d(TAG, "🔍 Search area: X($searchStartX-$searchEndX), Y($searchStartY-$searchEndY) [${if (isLandscapeMode) "LANDSCAPE" else "PORTRAIT"}]")
             
-            // 🎯 PRIMARY: Template matching for specific ball detection
-            val templateMatches = detectBallUsingTemplate(bitmap, searchStartX, searchEndX, searchStartY, searchEndY)
+            // 🎯 PRIMARY: Multi-template matching for specific ball detection
+            val templateMatches = detectBallUsingMultiTemplate(bitmap, searchStartX, searchEndX, searchStartY, searchEndY)
             
             // 🎯 IMMEDIATE OVERLAY UPDATE: Show template matches right away!
             if (templateMatches.isNotEmpty()) {
@@ -581,14 +582,19 @@ class ScreenCaptureService : Service() {
         val edgeStrength: Float
     )
     
-    // Load ball template for template matching
-    private fun loadBallTemplate() {
+    // Initialize multi-template ball detection system
+    private fun initializeBallTemplateManager() {
         try {
-            // For now, create a simple template - you'll replace this with actual ball image
-            ballTemplate = createSimpleBallTemplate()
-            Log.d(TAG, "🎯 Ball template loaded successfully")
+            ballTemplateManager = BallTemplateManager(this)
+            ballTemplateManager?.initialize()
+            
+            val templateCount = ballTemplateManager?.getTemplateCount() ?: 0
+            val templateNames = ballTemplateManager?.getTemplateNames() ?: emptyList()
+            
+            Log.d(TAG, "🎯 Multi-template system initialized: $templateCount templates")
+            Log.d(TAG, "📋 Templates: ${templateNames.joinToString(", ")}")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to load ball template", e)
+            Log.e(TAG, "Failed to initialize ball template manager", e)
         }
     }
     
@@ -645,72 +651,89 @@ class ScreenCaptureService : Service() {
         return template
     }
     
-    // Enhanced template matching for Rocket League ball detection
-    private fun detectBallUsingTemplate(bitmap: Bitmap, startX: Int, endX: Int, startY: Int, endY: Int): List<CircleCandidate> {
+    // Multi-template ball detection with false positive filtering
+    private fun detectBallUsingMultiTemplate(bitmap: Bitmap, startX: Int, endX: Int, startY: Int, endY: Int): List<CircleCandidate> {
         val candidates = mutableListOf<CircleCandidate>()
-        val template = ballTemplate ?: return candidates
         
         try {
-            val templateWidth = template.width
-            val templateHeight = template.height
-            
-            Log.d(TAG, "🎯 Enhanced template matching: ${templateWidth}x${templateHeight} template")
-            
-            // Multi-scale template matching for different ball sizes
-            val scales = listOf(0.8f, 1.0f, 1.2f, 1.4f) // Different ball sizes
-            
-            for (scale in scales) {
-                val scaledWidth = (templateWidth * scale).toInt()
-                val scaledHeight = (templateHeight * scale).toInt()
-                
-                if (scaledWidth < 20 || scaledHeight < 20) continue // Too small
-                if (scaledWidth > 120 || scaledHeight > 120) continue // Too large
-                
-                val scaledTemplate = Bitmap.createScaledBitmap(template, scaledWidth, scaledHeight, true)
-                val threshold = 0.65f // Slightly lower threshold for real ball detection
-                
-                // Search for template matches at this scale
-                val searchStep = 6 // More thorough search for accuracy
-                for (y in startY until (endY - scaledHeight) step searchStep) {
-                    for (x in startX until (endX - scaledWidth) step searchStep) {
-                        val similarity = calculateEnhancedSimilarity(bitmap, scaledTemplate, x, y)
-                        
-                        if (similarity > threshold) {
-                            val centerX = x + scaledWidth / 2
-                            val centerY = y + scaledHeight / 2
-                            val radius = scaledWidth / 2
-                            
-                            // Boost confidence for better scale matches
-                            val scaleBonus = if (scale == 1.0f) 0.1f else 0.0f
-                            val finalConfidence = (similarity + scaleBonus).coerceAtMost(1.0f)
-                            
-                            candidates.add(CircleCandidate(
-                                x = centerX.toFloat(),
-                                y = centerY.toFloat(),
-                                radius = radius.toFloat(),
-                                confidence = finalConfidence,
-                                edgeStrength = 0.9f // Very high for template matches
-                            ))
-                            
-                            Log.d(TAG, "🎯 Template match: ($centerX,$centerY) scale=${scale} similarity=${"%.3f".format(similarity)}")
-                        }
-                    }
-                }
-                
-                scaledTemplate.recycle() // Clean up memory
+            val templateManager = ballTemplateManager
+            if (templateManager == null) {
+                Log.w(TAG, "⚠️ Template manager not initialized, falling back to synthetic template")
+                return detectBallUsingLegacyTemplate(bitmap, startX, endX, startY, endY)
             }
             
-            Log.d(TAG, "🎯 Multi-scale template matching found ${candidates.size} candidates")
+            Log.d(TAG, "🎯 Multi-template detection with ${templateManager.getTemplateCount()} templates")
+            
+            // Use the new multi-template system with false positive filtering
+            val templateMatches = templateManager.detectBalls(bitmap, startX, endX, startY, endY)
+            
+            // Convert template matches to CircleCandidate format
+            for (match in templateMatches) {
+                candidates.add(CircleCandidate(
+                    x = match.x,
+                    y = match.y,
+                    radius = match.radius,
+                    confidence = match.similarity,
+                    edgeStrength = 0.9f // High edge strength for template matches
+                ))
+                
+                Log.d(TAG, "🎯 Multi-template match: (${match.x.toInt()}, ${match.y.toInt()}) " +
+                      "similarity=${"%.3f".format(match.similarity)}, template=${match.templateName}")
+            }
+            
+            Log.d(TAG, "🎯 Multi-template detection found ${candidates.size} candidates after filtering")
             
         } catch (e: Exception) {
-            Log.e(TAG, "Error in enhanced template matching", e)
+            Log.e(TAG, "Error in multi-template detection", e)
         }
         
         return candidates
     }
     
-    // Enhanced similarity calculation for Rocket League ball detection
-    private fun calculateEnhancedSimilarity(bitmap: Bitmap, template: Bitmap, startX: Int, startY: Int): Float {
+    // Legacy template detection as fallback
+    private fun detectBallUsingLegacyTemplate(bitmap: Bitmap, startX: Int, endX: Int, startY: Int, endY: Int): List<CircleCandidate> {
+        val candidates = mutableListOf<CircleCandidate>()
+        
+        try {
+            // Create a simple synthetic template as fallback
+            val template = createSimpleBallTemplate()
+            val templateWidth = template.width
+            val templateHeight = template.height
+            
+            Log.d(TAG, "🔄 Using legacy template detection: ${templateWidth}x${templateHeight}")
+            
+            // Single scale matching for fallback
+            val threshold = 0.65f
+            val searchStep = 8
+            
+            for (y in startY until (endY - templateHeight) step searchStep) {
+                for (x in startX until (endX - templateWidth) step searchStep) {
+                    val similarity = calculateLegacySimilarity(bitmap, template, x, y)
+                    
+                    if (similarity >= threshold) {
+                        candidates.add(CircleCandidate(
+                            x = x + templateWidth / 2f,
+                            y = y + templateHeight / 2f,
+                            radius = templateWidth / 2f,
+                            confidence = similarity,
+                            edgeStrength = 0.6f
+                        ))
+                    }
+                }
+            }
+            
+            template.recycle()
+            Log.d(TAG, "🔄 Legacy template found ${candidates.size} candidates")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in legacy template detection", e)
+        }
+        
+        return candidates
+    }
+    
+    // Legacy similarity calculation for fallback template detection
+    private fun calculateLegacySimilarity(bitmap: Bitmap, template: Bitmap, startX: Int, startY: Int): Float {
         val templateWidth = template.width
         val templateHeight = template.height
         var colorSimilarity = 0f
@@ -785,7 +808,7 @@ class ScreenCaptureService : Service() {
     
     // Legacy similarity calculation (kept for fallback)
     private fun calculateTemplateSimilarity(bitmap: Bitmap, template: Bitmap, startX: Int, startY: Int): Float {
-        return calculateEnhancedSimilarity(bitmap, template, startX, startY)
+        return calculateLegacySimilarity(bitmap, template, startX, startY)
     }
     
     // Detect circular objects using edge detection and shape analysis
@@ -1291,6 +1314,7 @@ class ScreenCaptureService : Service() {
         
         backgroundHandler?.post {
             inferenceEngine?.close()
+            ballTemplateManager?.cleanup()
         }
         
         backgroundThread?.quitSafely()
