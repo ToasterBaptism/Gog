@@ -48,6 +48,9 @@ class ScreenCaptureService : Service() {
     
     companion object {
         private const val TAG = "ScreenCaptureService"
+        private var instance: ScreenCaptureService? = null
+        
+        fun getInstance(): ScreenCaptureService? = instance
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "screen_capture_channel"
         private const val TARGET_FPS = 25
@@ -72,6 +75,13 @@ class ScreenCaptureService : Service() {
     private var lastFrameTime = 0L
     private var frameCount = 0
     
+    // Detection statistics
+    private var framesProcessed = 0
+    private var ballsDetected = 0
+    private var lastDetectionTime = 0L
+    private var templatesLoaded = 0
+    private var startTime = System.currentTimeMillis()
+    
     // Screen orientation and dimensions
     private var screenWidth = 0
     private var screenHeight = 0
@@ -87,10 +97,12 @@ class ScreenCaptureService : Service() {
     
     override fun onCreate() {
         super.onCreate()
+        instance = this
         createNotificationChannel()
         setupBackgroundThread()
         initializeBallTemplateManager()
         lastPerformanceLog = System.currentTimeMillis()
+        startTime = System.currentTimeMillis()
         startPredictionOverlay()
         Log.d(TAG, "ScreenCaptureService created")
     }
@@ -470,13 +482,47 @@ class ScreenCaptureService : Service() {
             // 🎯 PRIMARY: Multi-template matching for specific ball detection
             val templateMatches = detectBallUsingMultiTemplate(bitmap, searchStartX, searchEndX, searchStartY, searchEndY)
             
+            // Update statistics
+            framesProcessed++
+            if (templateMatches.isNotEmpty()) {
+                ballsDetected += templateMatches.size
+                lastDetectionTime = System.currentTimeMillis()
+            }
+            
+            Log.d(TAG, "🔍 DETECTION RESULTS: ${templateMatches.size} template matches found")
+            
+            // 🧪 ALWAYS show test overlay points for debugging
+            val testPoints = listOf(
+                PredictionOverlayService.PredictionPoint(screenWidth * 0.1f, screenHeight * 0.1f, 0f),
+                PredictionOverlayService.PredictionPoint(screenWidth * 0.5f, screenHeight * 0.5f, 1f),
+                PredictionOverlayService.PredictionPoint(screenWidth * 0.9f, screenHeight * 0.9f, 2f)
+            )
+            Log.d(TAG, "🧪 ALWAYS sending test points: screen ${screenWidth}x${screenHeight}")
+            testPoints.forEach { point ->
+                Log.d(TAG, "🧪 Test point: (${point.x}, ${point.y})")
+            }
+            PredictionOverlayService.updatePredictions(testPoints)
+            
             // 🎯 IMMEDIATE OVERLAY UPDATE: Show template matches right away!
             if (templateMatches.isNotEmpty()) {
                 Log.d(TAG, "🎯 IMMEDIATE OVERLAY UPDATE: ${templateMatches.size} template matches found!")
-                val overlayPoints = templateMatches.map { match ->
-                    PredictionPoint(match.x, match.y, 0f)
+                templateMatches.forEachIndexed { index, match ->
+                    Log.d(TAG, "🎯 Match #${index+1}: (${match.x.toInt()}, ${match.y.toInt()}) confidence=${String.format("%.3f", match.confidence)}")
                 }
-                updatePredictionOverlay(overlayPoints)
+                
+                val overlayPoints = templateMatches.map { match ->
+                    PredictionOverlayService.PredictionPoint(match.x, match.y, 0f)
+                }
+                PredictionOverlayService.updatePredictions(overlayPoints)
+            } else {
+                Log.d(TAG, "❌ NO TEMPLATE MATCHES - sending test overlay points for debugging")
+                // Send test points even when no ball detected to verify overlay works
+                val testPoints = listOf(
+                    PredictionOverlayService.PredictionPoint(screenWidth * 0.1f, screenHeight * 0.1f, 0f),
+                    PredictionOverlayService.PredictionPoint(screenWidth * 0.5f, screenHeight * 0.5f, 1f),
+                    PredictionOverlayService.PredictionPoint(screenWidth * 0.9f, screenHeight * 0.9f, 2f)
+                )
+                PredictionOverlayService.updatePredictions(testPoints)
             }
             
             // 🔍 FALLBACK: Shape analysis if template matching fails
@@ -590,6 +636,7 @@ class ScreenCaptureService : Service() {
             
             val templateCount = ballTemplateManager?.getTemplateCount() ?: 0
             val templateNames = ballTemplateManager?.getTemplateNames() ?: emptyList()
+            templatesLoaded = templateCount
             
             Log.d(TAG, "🎯 Multi-template system initialized: $templateCount templates")
             Log.d(TAG, "📋 Templates: ${templateNames.joinToString(", ")}")
@@ -1309,6 +1356,7 @@ class ScreenCaptureService : Service() {
     
     override fun onDestroy() {
         super.onDestroy()
+        instance = null
         stopCapture()
         stopPredictionOverlay()
         
@@ -1334,5 +1382,28 @@ class ScreenCaptureService : Service() {
         mediaProjection = null
         
         Log.d(TAG, "Screen capture stopped")
+    }
+    
+    // Statistics methods for React Native bridge
+    fun getFramesProcessed(): Int = framesProcessed
+    fun getBallsDetected(): Int = ballsDetected
+    fun getLastDetectionTime(): Long = lastDetectionTime
+    fun getTemplatesLoaded(): Int = templatesLoaded
+    
+    fun getAverageFPS(): Double {
+        val elapsedTime = System.currentTimeMillis() - startTime
+        return if (elapsedTime > 0) {
+            (framesProcessed * 1000.0) / elapsedTime
+        } else {
+            0.0
+        }
+    }
+    
+    fun resetStatistics() {
+        framesProcessed = 0
+        ballsDetected = 0
+        lastDetectionTime = 0L
+        startTime = System.currentTimeMillis()
+        Log.d(TAG, "Detection statistics reset")
     }
 }

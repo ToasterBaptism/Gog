@@ -17,9 +17,18 @@ const StartScreen: React.FC = () => {
   const [permissionsGranted, setPermissionsGranted] = useState(false);
   const [showPermissionOverlay, setShowPermissionOverlay] = useState(false);
   const [statusText, setStatusText] = useState('Service inactive');
+  const [detectionStats, setDetectionStats] = useState({
+    isDetecting: false,
+    framesProcessed: 0,
+    ballsDetected: 0,
+    lastDetectionTime: 0,
+    averageFPS: 0,
+    templatesLoaded: 0,
+  });
   const mountedRef = useRef(true);
   const startCheckTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startAttemptRef = useRef(0);
+  const statsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     checkServiceStatus();
@@ -37,9 +46,49 @@ const StartScreen: React.FC = () => {
         clearTimeout(startCheckTimeoutRef.current);
         startCheckTimeoutRef.current = null;
       }
+      if (statsIntervalRef.current) {
+        clearInterval(statsIntervalRef.current);
+        statsIntervalRef.current = null;
+      }
       subscription?.remove();
     };
   }, []);
+
+  // Update detection statistics when service is active
+  useEffect(() => {
+    if (isActive && serviceEnabled) {
+      // Start polling for statistics
+      statsIntervalRef.current = setInterval(async () => {
+        try {
+          const stats = await NativeControl.getDetectionStatistics();
+          setDetectionStats(stats);
+        } catch (error) {
+          console.log('Failed to get detection statistics:', error);
+        }
+      }, 1000); // Update every second
+    } else {
+      // Clear statistics when service is not active
+      if (statsIntervalRef.current) {
+        clearInterval(statsIntervalRef.current);
+        statsIntervalRef.current = null;
+      }
+      setDetectionStats({
+        isDetecting: false,
+        framesProcessed: 0,
+        ballsDetected: 0,
+        lastDetectionTime: 0,
+        averageFPS: 0,
+        templatesLoaded: 0,
+      });
+    }
+
+    return () => {
+      if (statsIntervalRef.current) {
+        clearInterval(statsIntervalRef.current);
+        statsIntervalRef.current = null;
+      }
+    };
+  }, [isActive, serviceEnabled]);
 
   const checkServiceStatus = async () => {
     try {
@@ -251,6 +300,27 @@ const StartScreen: React.FC = () => {
     checkServiceStatus();
   };
 
+  const resetStatistics = async () => {
+    try {
+      await NativeControl.resetDetectionStatistics();
+      // Immediately update the display
+      const stats = await NativeControl.getDetectionStatistics();
+      setDetectionStats(stats);
+    } catch (error) {
+      console.log('Failed to reset statistics:', error);
+    }
+  };
+
+  const formatLastDetection = (timestamp: number) => {
+    if (timestamp === 0) return 'Never';
+    const now = Date.now();
+    const diff = now - timestamp;
+    if (diff < 1000) return 'Just now';
+    if (diff < 60000) return `${Math.floor(diff / 1000)}s ago`;
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    return `${Math.floor(diff / 3600000)}h ago`;
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.content}>
@@ -272,6 +342,53 @@ const StartScreen: React.FC = () => {
         </TouchableOpacity>
 
         <Text style={styles.statusText}>{statusText}</Text>
+
+        {/* Detection Statistics */}
+        {isActive && serviceEnabled && (
+          <View style={styles.statsContainer}>
+            <Text style={styles.statsTitle}>🎯 Detection Statistics</Text>
+            
+            <View style={styles.statsGrid}>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Status</Text>
+                <Text style={[styles.statValue, { color: detectionStats.isDetecting ? '#4CAF50' : '#FF9800' }]}>
+                  {detectionStats.isDetecting ? '🟢 Active' : '🟡 Standby'}
+                </Text>
+              </View>
+              
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Templates</Text>
+                <Text style={styles.statValue}>{detectionStats.templatesLoaded}</Text>
+              </View>
+              
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Frames</Text>
+                <Text style={styles.statValue}>{detectionStats.framesProcessed.toLocaleString()}</Text>
+              </View>
+              
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Balls Found</Text>
+                <Text style={[styles.statValue, { color: detectionStats.ballsDetected > 0 ? '#4CAF50' : '#666' }]}>
+                  {detectionStats.ballsDetected}
+                </Text>
+              </View>
+              
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>FPS</Text>
+                <Text style={styles.statValue}>{detectionStats.averageFPS.toFixed(1)}</Text>
+              </View>
+              
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Last Detection</Text>
+                <Text style={styles.statValue}>{formatLastDetection(detectionStats.lastDetectionTime)}</Text>
+              </View>
+            </View>
+            
+            <TouchableOpacity style={styles.resetButton} onPress={resetStatistics}>
+              <Text style={styles.resetButtonText}>🔄 Reset Stats</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       <PermissionOverlay
@@ -332,6 +449,55 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666666',
     textAlign: 'center',
+  },
+  statsContainer: {
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  statsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  statItem: {
+    width: '48%',
+    marginBottom: 12,
+    padding: 8,
+    backgroundColor: '#2a2a2a',
+    borderRadius: 8,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 4,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  resetButton: {
+    marginTop: 12,
+    padding: 10,
+    backgroundColor: '#333',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  resetButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

@@ -4,6 +4,15 @@ interface PermissionStatus {
   [key: string]: boolean;
 }
 
+interface DetectionStatistics {
+  isDetecting: boolean;
+  framesProcessed: number;
+  ballsDetected: number;
+  lastDetectionTime: number;
+  averageFPS: number;
+  templatesLoaded: number;
+}
+
 interface NativeControlInterface {
   isServiceEnabled(): Promise<boolean>;
   openAccessibilitySettings(): void;
@@ -19,6 +28,8 @@ interface NativeControlInterface {
   openBatteryOptimizationSettings(): Promise<void>;
   isAccessibilityServiceActuallyRunning(): Promise<boolean>;
   debugPermissionSystem(): Promise<any>;
+  getDetectionStatistics(): Promise<DetectionStatistics>;
+  resetDetectionStatistics(): Promise<void>;
 }
 
 const NativeControl = NativeModules.NativeControlModule as NativeControlInterface | undefined;
@@ -38,6 +49,15 @@ const Fallback: NativeControlInterface = {
   openBatteryOptimizationSettings: async () => { throw new Error('NativeControlModule not linked'); },
   isAccessibilityServiceActuallyRunning: async () => false,
   debugPermissionSystem: async () => ({}),
+  getDetectionStatistics: async () => ({
+    isDetecting: false,
+    framesProcessed: 0,
+    ballsDetected: 0,
+    lastDetectionTime: 0,
+    averageFPS: 0,
+    templatesLoaded: 0,
+  }),
+  resetDetectionStatistics: async () => { throw new Error('NativeControlModule not linked'); },
 };
 
 export default (NativeControl ?? Fallback);

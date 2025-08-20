@@ -16,7 +16,7 @@ class BallTemplateManager(private val context: Context) {
     companion object {
         private const val TAG = "BallTemplateManager"
         private const val TEMPLATE_FOLDER = "ball_templates"
-        private const val SIMILARITY_THRESHOLD = 0.85f // Higher threshold for better selectivity
+        private const val SIMILARITY_THRESHOLD = 0.65f // Lowered threshold for better detection
         private const val FALSE_POSITIVE_THRESHOLD = 0.99f // Perfect matches are suspicious
         private const val MAX_HORIZONTAL_MATCHES = 10 // Max matches in same Y band
         private const val REGULAR_SPACING_THRESHOLD = 6 // UI elements have regular spacing
@@ -221,7 +221,12 @@ class BallTemplateManager(private val context: Context) {
         
         // Try each template
         for (template in ballTemplates) {
+            Log.d(TAG, "🔍 Testing template: ${template.name}")
             val matches = detectWithSingleTemplate(bitmap, template, startX, endX, startY, endY)
+            Log.d(TAG, "🎯 Template ${template.name}: ${matches.size} matches")
+            matches.forEach { match ->
+                Log.d(TAG, "  📍 Match: (${match.x.toInt()}, ${match.y.toInt()}) similarity=${String.format("%.3f", match.similarity)}")
+            }
             allMatches.addAll(matches)
         }
         
@@ -263,10 +268,21 @@ class BallTemplateManager(private val context: Context) {
             
             // Search with adaptive step size
             val searchStep = maxOf(4, scaledWidth / 10)
+            var bestSimilarity = 0f
+            var bestX = 0
+            var bestY = 0
+            var totalChecks = 0
             
             for (y in startY until (endY - scaledHeight) step searchStep) {
                 for (x in startX until (endX - scaledWidth) step searchStep) {
                     val similarity = calculateEnhancedSimilarity(bitmap, scaledTemplate, x, y)
+                    totalChecks++
+                    
+                    if (similarity > bestSimilarity) {
+                        bestSimilarity = similarity
+                        bestX = x
+                        bestY = y
+                    }
                     
                     if (similarity >= SIMILARITY_THRESHOLD && similarity < FALSE_POSITIVE_THRESHOLD) {
                         matches.add(TemplateMatch(
@@ -279,6 +295,8 @@ class BallTemplateManager(private val context: Context) {
                     }
                 }
             }
+            
+            Log.d(TAG, "🔍 Template ${template.name} scale ${scale}: checked $totalChecks positions, best similarity = ${String.format("%.3f", bestSimilarity)} at ($bestX, $bestY)")
             
             scaledTemplate.recycle()
         }

@@ -723,4 +723,46 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
             promise.reject("ERROR", "Failed to get debug info: ${e.message}", e)
         }
     }
+    
+    @ReactMethod
+    fun getDetectionStatistics(promise: Promise) {
+        try {
+            val stats = mutableMapOf<String, Any>()
+            
+            // Get statistics from ScreenCaptureService if running
+            val service = com.rlsideswipe.access.service.ScreenCaptureService.getInstance()
+            if (service != null) {
+                stats["isDetecting"] = true
+                stats["framesProcessed"] = service.getFramesProcessed()
+                stats["ballsDetected"] = service.getBallsDetected()
+                stats["lastDetectionTime"] = service.getLastDetectionTime()
+                stats["averageFPS"] = service.getAverageFPS()
+                stats["templatesLoaded"] = service.getTemplatesLoaded()
+            } else {
+                stats["isDetecting"] = false
+                stats["framesProcessed"] = 0
+                stats["ballsDetected"] = 0
+                stats["lastDetectionTime"] = 0L
+                stats["averageFPS"] = 0.0
+                stats["templatesLoaded"] = 0
+            }
+            
+            promise.resolve(Arguments.makeNativeMap(stats))
+        } catch (e: Exception) {
+            Log.e("NativeControl", "Failed to get detection statistics", e)
+            promise.reject("ERROR", "Failed to get detection statistics: ${e.message}", e)
+        }
+    }
+    
+    @ReactMethod
+    fun resetDetectionStatistics(promise: Promise) {
+        try {
+            val service = com.rlsideswipe.access.service.ScreenCaptureService.getInstance()
+            service?.resetStatistics()
+            promise.resolve(null)
+        } catch (e: Exception) {
+            Log.e("NativeControl", "Failed to reset detection statistics", e)
+            promise.reject("ERROR", "Failed to reset detection statistics: ${e.message}", e)
+        }
+    }
 }
