@@ -111,9 +111,9 @@ class PredictionOverlayService : Service() {
                     @Suppress("DEPRECATION")
                     WindowManager.LayoutParams.TYPE_PHONE
                 },
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                        WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
                 PixelFormat.TRANSLUCENT
             )
             
@@ -169,13 +169,21 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
         private const val TAG = "PredictionOverlayView"
     }
     
+    init {
+        // Make sure the view can receive touch events
+        isClickable = true
+        isFocusable = true
+        isFocusableInTouchMode = true
+        Log.d(TAG, "🖱️ PredictionOverlayView initialized with touch capabilities")
+    }
+    
     private var predictions: List<PredictionOverlayService.PredictionPoint> = emptyList()
     
     // Manual override functionality
     private var manualBallPosition: Pair<Float, Float>? = null
     private var isManualMode = false
     private var isDragging = false
-    private val touchRadius = 100f // Touch detection radius around ball
+    private val touchRadius = 200f // Touch detection radius around ball (increased for easier grabbing)
     
     // UI Control buttons
     private var showControlButtons = false
@@ -291,12 +299,15 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
             }
             
             if (ballX != null && ballY != null) {
+                Log.d(TAG, "🎨 Drawing ball at ($ballX, $ballY) manual=$isManualMode")
                 
                 // Draw VERY VISIBLE ball indicator - different colors for manual vs detected
                 if (isManualMode) {
                     paint.color = Color.argb(255, 255, 255, 0) // Bright yellow for manual mode
+                    Log.d(TAG, "🎨 Drawing YELLOW manual ball at ($ballX, $ballY)")
                 } else {
                     paint.color = Color.argb(255, 255, 0, 255) // Bright magenta for detected
+                    Log.d(TAG, "🎨 Drawing MAGENTA detected ball at ($ballX, $ballY)")
                 }
                 paint.style = Paint.Style.FILL
                 paint.strokeWidth = 0f
@@ -459,6 +470,8 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
             bottomY
         )
         
+        Log.d(TAG, "🎨 Button rects - Accept: $acceptButtonRect, screen: ${width}x${height}")
+        
         // Cancel button (red) - center
         val centerX = width / 2f
         cancelButtonRect.set(
@@ -535,10 +548,13 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
         val touchX = event.x
         val touchY = event.y
         
+        Log.d(TAG, "🖱️ TOUCH EVENT: action=${event.action} at ($touchX, $touchY) manual=$isManualMode dragging=$isDragging")
+        
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 // Check if touching control buttons first
                 if (showControlButtons) {
+                    Log.d(TAG, "🖱️ Checking buttons - Accept: $acceptButtonRect, Cancel: $cancelButtonRect, Exit: $exitButtonRect")
                     when {
                         acceptButtonRect.contains(touchX, touchY) -> {
                             Log.d(TAG, "✅ Accept button pressed - capturing template and staying in manual mode")
@@ -561,6 +577,9 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
                 // If not in manual mode, start manual mode on any touch
                 if (!isManualMode) {
                     startManualMode(touchX, touchY)
+                    // Immediately start dragging since user just placed the ball
+                    isDragging = true
+                    Log.d(TAG, "🖱️ Started manual mode and dragging from ($touchX, $touchY)")
                     return true
                 }
                 
@@ -574,29 +593,35 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
                 if (distance <= touchRadius) {
                     isDragging = true
                     showControlButtons = false // Hide buttons while dragging
-                    Log.d(TAG, "🖱️ Started dragging ball from ($touchX, $touchY)")
+                    Log.d(TAG, "🖱️ Started dragging ball from ($touchX, $touchY), distance=$distance, radius=$touchRadius")
                     invalidate()
                     return true
+                } else {
+                    Log.d(TAG, "🖱️ Touch too far from ball - distance=$distance, radius=$touchRadius, ball at $ballPos")
                 }
             }
 
             MotionEvent.ACTION_MOVE -> {
                 if (isDragging && isManualMode) {
                     manualBallPosition = Pair(touchX, touchY)
-                    Log.d(TAG, "🖱️ Ball dragged to ($touchX, $touchY)")
+                    Log.d(TAG, "🖱️ Ball dragged to ($touchX, $touchY) - manual=$isManualMode, dragging=$isDragging")
                     invalidate()
                     return true
+                } else {
+                    Log.d(TAG, "🖱️ ACTION_MOVE ignored - manual=$isManualMode, dragging=$isDragging")
                 }
             }
 
             MotionEvent.ACTION_UP -> {
                 if (isDragging) {
                     isDragging = false
-                    Log.d(TAG, "🖱️ Drag ended at (${manualBallPosition?.first}, ${manualBallPosition?.second})")
+                    Log.d(TAG, "🖱️ Drag ended at (${manualBallPosition?.first}, ${manualBallPosition?.second}) - showing buttons")
                     // Show control buttons after positioning
                     showControlButtons = true
                     invalidate()
                     return true
+                } else {
+                    Log.d(TAG, "🖱️ ACTION_UP ignored - not dragging, manual=$isManualMode")
                 }
             }
         }
@@ -606,8 +631,8 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
     private fun startManualMode(touchX: Float, touchY: Float) {
         isManualMode = true
         manualBallPosition = Pair(touchX, touchY)
-        showControlButtons = true
-        Log.d(TAG, "🖱️ Manual mode started at ($touchX, $touchY)")
+        showControlButtons = false // Don't show buttons immediately, wait for drag to finish
+        Log.d(TAG, "🖱️ Manual mode started at ($touchX, $touchY) - ready for dragging")
         invalidate()
     }
     

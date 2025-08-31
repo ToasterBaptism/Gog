@@ -1,21 +1,13 @@
 # Task List
 
-1. ✅ Install Java 17 (OpenJDK) for Android development
-
-2. ✅ Download and install Android SDK with required API levels
-
-3. ✅ Download and install Android NDK for native development
-
-4. ✅ Install Gradle build system
-
-5. ✅ Install Node.js and npm/yarn for React Native
-
-6. ✅ Install React Native CLI tools
-
-7. ✅ Install additional build tools (cmake, ninja, etc.)
-
-8. ✅ Configure environment variables and paths
-
-9. ✅ Test the build setup by attempting to build the APK
-
+1. 🔄 Check web server is serving correct APK
+User reports web server still serving old APK
+2. ⏳ Fix Accept/Cancel/Exit button touch detection
+Buttons not responding to touch events
+3. ⏳ Fix manual ball position dragging
+Yellow square still not draggable, getting locked up
+4. ⏳ Fix pink square trajectory updates
+Pink square not moving or recognizing ball position
+5. ⏳ Test complete manual system end-to-end
+Verify all manual controls work properly
 
