@@ -30,6 +30,11 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
     private var isInitialized = false
     private var modelMetadata: ModelMetadata? = null
 
+    // Dynamic model IO metadata used at runtime
+    private var inputWidth: Int = 320
+    private var inputHeight: Int = 320
+    private var inputChannels: Int = 3
+
     companion object {
         private const val TAG = "TFLiteInferenceEngine"
         private const val MODEL_FILE = "rl_sideswipe_ball_v1.tflite"
@@ -45,7 +50,10 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
     data class ModelMetadata(
         val inputShape: IntArray,
         val outputShape: IntArray,
-        val quantized: Boolean,
+        val inputDataType: org.tensorflow.lite.DataType,
+        val outputDataType: org.tensorflow.lite.DataType,
+        val inputQuantized: Boolean,
+        val outputQuantized: Boolean,
         val version: String
     )
 
@@ -153,17 +161,26 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
         try {
             val inputTensor = interpreter.getInputTensor(0)
             val outputTensor = interpreter.getOutputTensor(0)
-            
+
+            val inShape = inputTensor.shape()
+            val outShape = outputTensor.shape()
+            inputHeight = inShape.getOrNull(1) ?: inputHeight
+            inputWidth = inShape.getOrNull(2) ?: inputWidth
+            inputChannels = inShape.getOrNull(3) ?: inputChannels
+
             modelMetadata = ModelMetadata(
-                inputShape = inputTensor.shape(),
-                outputShape = outputTensor.shape(),
-                quantized = inputTensor.dataType() != org.tensorflow.lite.DataType.FLOAT32,
+                inputShape = inShape,
+                outputShape = outShape,
+                inputDataType = inputTensor.dataType(),
+                outputDataType = outputTensor.dataType(),
+                inputQuantized = inputTensor.dataType() != org.tensorflow.lite.DataType.FLOAT32,
+                outputQuantized = outputTensor.dataType() != org.tensorflow.lite.DataType.FLOAT32,
                 version = "v1.0"
             )
-            
-            Log.d(TAG, "📊 Model metadata: input=${modelMetadata?.inputShape?.contentToString()}, " +
-                      "output=${modelMetadata?.outputShape?.contentToString()}, " +
-                      "quantized=${modelMetadata?.quantized}")
+
+            Log.d(TAG, "📊 Model metadata: input=${inShape.contentToString()} ${modelMetadata?.inputDataType}, " +
+                      "output=${outShape.contentToString()} ${modelMetadata?.outputDataType}, " +
+                      "quantized(in,out)=${modelMetadata?.inputQuantized},${modelMetadata?.outputQuantized}")
         } catch (e: Exception) {
             Log.w(TAG, "⚠️ Failed to extract model metadata: ${e.message}")
         }
@@ -177,13 +194,12 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
         
         try {
             val inputTensor = interpreter.getInputTensor(0)
-            val expectedShape = intArrayOf(1, INPUT_SIZE, INPUT_SIZE, CHANNELS)
-            
-            if (!inputTensor.shape().contentEquals(expectedShape)) {
-                throw IllegalStateException("Model input shape mismatch: expected ${expectedShape.contentToString()}, got ${inputTensor.shape().contentToString()}")
+            val shape = inputTensor.shape()
+            if (shape.size != 4) {
+                throw IllegalStateException("Model input shape must be 4D, got ${shape.contentToString()}")
             }
-            
-            Log.d(TAG, "✅ Model validation passed")
+            inputHeight = shape[1]; inputWidth = shape[2]; inputChannels = shape[3]
+            Log.d(TAG, "✅ Model validation passed with input=${shape.contentToString()} -> width=$inputWidth height=$inputHeight channels=$inputChannels")
         } catch (e: Exception) {
             Log.e(TAG, "🚨 Model validation failed", e)
             throw e
@@ -195,17 +211,32 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
      */
     private fun initializeBuffers() {
         try {
-            val inputSize = INPUT_SIZE * INPUT_SIZE * CHANNELS * BYTES_PER_CHANNEL
-            inputBuffer = ByteBuffer.allocateDirect(inputSize).apply { 
-                order(ByteOrder.nativeOrder()) 
+            val interpreter = this.interpreter
+            if (interpreter != null) {
+                val inTensor = interpreter.getInputTensor(0)
+                val outTensor = interpreter.getOutputTensor(0)
+                val inElems = inTensor.shape().fold(1) { acc, v -> acc * v }
+                val outElems = outTensor.shape().fold(1) { acc, v -> acc * v }
+                val inBpe = when (inTensor.dataType()) {
+                    org.tensorflow.lite.DataType.UINT8, org.tensorflow.lite.DataType.INT8 -> 1
+                    else -> 4
+                }
+                val outBpe = when (outTensor.dataType()) {
+                    org.tensorflow.lite.DataType.UINT8, org.tensorflow.lite.DataType.INT8 -> 1
+                    else -> 4
+                }
+                val inputSize = inElems * inBpe
+                val outputSize = outElems * outBpe
+                inputBuffer = ByteBuffer.allocateDirect(inputSize).apply { order(ByteOrder.nativeOrder()) }
+                outputBuffer = ByteBuffer.allocateDirect(outputSize).apply { order(ByteOrder.nativeOrder()) }
+                Log.d(TAG, "📦 Buffers initialized (dynamic): input=${inputSize}B (${inTensor.dataType()} ${inTensor.shape().contentToString()}), output=${outputSize}B (${outTensor.dataType()} ${outTensor.shape().contentToString()})")
+            } else {
+                val inputSize = INPUT_SIZE * INPUT_SIZE * CHANNELS * BYTES_PER_CHANNEL
+                inputBuffer = ByteBuffer.allocateDirect(inputSize).apply { order(ByteOrder.nativeOrder()) }
+                val outputSize = OUTPUT_SIZE * BYTES_PER_CHANNEL
+                outputBuffer = ByteBuffer.allocateDirect(outputSize).apply { order(ByteOrder.nativeOrder()) }
+                Log.w(TAG, "📦 Buffers initialized (fallback): input=${inputSize}B, output=${outputSize}B")
             }
-
-            val outputSize = OUTPUT_SIZE * BYTES_PER_CHANNEL
-            outputBuffer = ByteBuffer.allocateDirect(outputSize).apply { 
-                order(ByteOrder.nativeOrder()) 
-            }
-            
-            Log.d(TAG, "📦 Buffers initialized: input=${inputSize}B, output=${outputSize}B")
         } catch (e: Exception) {
             Log.e(TAG, "🚨 Buffer initialization failed", e)
             throw e
@@ -217,7 +248,7 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
      */
     private fun createHanningWindow() {
         try {
-            val size = INPUT_SIZE
+            val size = inputWidth
             val center = size / 2f
             val radius = center * 0.9f
             
@@ -329,6 +360,12 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
             output.rewind()
             
             val inferenceStart = System.nanoTime()
+            // Ensure buffer sizes match tensor expectations
+            try {
+                interpreter.resizeInput(0, intArrayOf(1, inputHeight, inputWidth, inputChannels))
+            } catch (_: Exception) {
+                // Some interpreters don't require/allow explicit resize when using ByteBuffer
+            }
             interpreter.run(input, output)
             val inferenceTime = System.nanoTime() - inferenceStart
             
@@ -373,7 +410,8 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
             }
             
             // Use comprehensive TF Lite preprocessing pipeline
-            val preprocessed = TensorFlowLiteUtils.preprocessForBallDetection(frame, INPUT_SIZE)
+            val targetSize = inputWidth.coerceAtLeast(1)
+            val preprocessed = TensorFlowLiteUtils.preprocessForBallDetection(frame, targetSize)
             
             // Apply Hanning window for edge smoothing
             val windowed = applyHanningWindow(preprocessed)
@@ -397,8 +435,10 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
         
         try {
             val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-            val pixels = IntArray(INPUT_SIZE * INPUT_SIZE)
-            result.getPixels(pixels, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE)
+            val w = inputWidth
+            val h = inputHeight
+            val pixels = IntArray(w * h)
+            result.getPixels(pixels, 0, w, 0, 0, w, h)
             
             for (i in pixels.indices) {
                 val p = pixels[i]
@@ -415,7 +455,7 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
                 pixels[i] = (a shl 24) or (nr shl 16) or (ng shl 8) or nb
             }
             
-            result.setPixels(pixels, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE)
+            result.setPixels(pixels, 0, w, 0, 0, w, h)
             return result
         } catch (e: Exception) {
             Log.e(TAG, "🚨 Hanning window application failed: ${e.message}", e)
@@ -429,15 +469,64 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
     private fun bitmapToBuffer(bitmap: Bitmap, buffer: ByteBuffer) {
         try {
             buffer.rewind()
-            val pixels = IntArray(INPUT_SIZE * INPUT_SIZE)
-            bitmap.getPixels(pixels, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE)
+            val w = inputWidth
+            val h = inputHeight
+            val pixels = IntArray(w * h)
+            bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
             
-            // Normalize to [0, 1] range with proper color channel ordering
-            for (p in pixels) {
-                // RGB normalization
-                buffer.putFloat(((p ushr 16) and 0xFF) / 255.0f) // Red
-                buffer.putFloat(((p ushr 8) and 0xFF) / 255.0f)  // Green
-                buffer.putFloat((p and 0xFF) / 255.0f)           // Blue
+            // Write according to input tensor dtype (float/uint8/int8) and channel count
+            when (modelMetadata?.inputDataType) {
+                org.tensorflow.lite.DataType.UINT8 -> {
+                    if (inputChannels == 1) {
+                        for (p in pixels) {
+                            val r = (p ushr 16) and 0xFF
+                            val g = (p ushr 8) and 0xFF
+                            val b = p and 0xFF
+                            val gray = ((0.299f * r) + (0.587f * g) + (0.114f * b)).toInt().coerceIn(0, 255)
+                            buffer.put(gray.toByte())
+                        }
+                    } else {
+                        for (p in pixels) {
+                            buffer.put(((p ushr 16) and 0xFF).toByte())
+                            buffer.put(((p ushr 8) and 0xFF).toByte())
+                            buffer.put((p and 0xFF).toByte())
+                        }
+                    }
+                }
+                org.tensorflow.lite.DataType.INT8 -> {
+                    if (inputChannels == 1) {
+                        for (p in pixels) {
+                            val r = (p ushr 16) and 0xFF
+                            val g = (p ushr 8) and 0xFF
+                            val b = p and 0xFF
+                            val gray = ((0.299f * r) + (0.587f * g) + (0.114f * b)).toInt().coerceIn(0, 255) - 128
+                            buffer.put(gray.toByte())
+                        }
+                    } else {
+                        for (p in pixels) {
+                            buffer.put((((p ushr 16) and 0xFF) - 128).toByte())
+                            buffer.put((((p ushr 8) and 0xFF) - 128).toByte())
+                            buffer.put(((p and 0xFF) - 128).toByte())
+                        }
+                    }
+                }
+                else -> {
+                    if (inputChannels == 1) {
+                        for (p in pixels) {
+                            val r = (p ushr 16) and 0xFF
+                            val g = (p ushr 8) and 0xFF
+                            val b = p and 0xFF
+                            val gray = ((0.299f * r) + (0.587f * g) + (0.114f * b)) / 255.0f
+                            buffer.putFloat(gray)
+                        }
+                    } else {
+                        for (p in pixels) {
+                            buffer.putFloat(((p ushr 16) and 0xFF) / 255.0f)
+                            buffer.putFloat(((p ushr 8) and 0xFF) / 255.0f)
+                            buffer.putFloat((p and 0xFF) / 255.0f)
+                        }
+                    }
+                }
             }
             
             Log.d(TAG, "📊 Buffer conversion completed: ${buffer.position()} bytes written")
@@ -453,11 +542,40 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
     private fun parseOutputAdvanced(out: ByteBuffer, origW: Int, origH: Int): Detection? {
         return try {
             out.rewind()
-            val x = out.float
-            val y = out.float
-            val w = out.float
-            val h = out.float
-            val conf = out.float
+            // Handle possible quantized outputs by inspecting tensor dtype
+            var x: Float
+            var y: Float
+            var w: Float
+            var h: Float
+            var conf: Float
+            run {
+                val dtype = modelMetadata?.outputDataType
+                when (dtype) {
+                    org.tensorflow.lite.DataType.UINT8 -> {
+                        x = (out.get().toInt() and 0xFF) / 255f
+                        y = (out.get().toInt() and 0xFF) / 255f
+                        w = (out.get().toInt() and 0xFF) / 255f
+                        h = (out.get().toInt() and 0xFF) / 255f
+                        conf = (out.get().toInt() and 0xFF) / 255f
+                    }
+                    org.tensorflow.lite.DataType.INT8 -> {
+                        fun q(): Float = ((out.get().toInt()).coerceIn(-128,127) / 127f).coerceIn(-1f,1f)
+                        val qx = q(); val qy = q(); val qw = q(); val qh = q(); val qc = q()
+                        x = (qx + 1f) * 0.5f
+                        y = (qy + 1f) * 0.5f
+                        w = (qw + 1f) * 0.5f
+                        h = (qh + 1f) * 0.5f
+                        conf = (qc + 1f) * 0.5f
+                    }
+                    else -> {
+                        x = out.float
+                        y = out.float
+                        w = out.float
+                        h = out.float
+                        conf = out.float
+                    }
+                }
+            }
             
             Log.d(TAG, "🔍 Raw output: x=$x, y=$y, w=$w, h=$h, conf=$conf")
             

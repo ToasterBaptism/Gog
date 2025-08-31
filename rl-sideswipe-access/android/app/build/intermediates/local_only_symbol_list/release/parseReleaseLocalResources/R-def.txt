@@ -1,0 +1,37 @@
+R_DEF: Internal format may change without notice
+local
+color black
+color gray_dark
+color gray_light
+color gray_medium
+color overlay_ball
+color overlay_outline
+color overlay_path
+color primary_blue
+color primary_red
+color white
+dimen abc_edit_text_inset_bottom_material
+dimen abc_edit_text_inset_horizontal_material
+dimen abc_edit_text_inset_top_material
+drawable ic_notification
+drawable rn_edit_text_material
+drawable textfield_activated_mtrl_alpha
+drawable textfield_default_mtrl_alpha
+id overlay_renderer
+integer react_native_dev_server_port
+integer react_native_inspector_proxy_port
+layout overlay_ball_path
+mipmap ic_launcher
+mipmap ic_launcher_round
+raw approach
+raw bounce
+string accessibility_service_description
+string app_name
+string screen_capture_notification_channel_description
+string screen_capture_notification_channel_name
+string screen_capture_notification_text
+string screen_capture_notification_title
+style AppTheme
+xml accessibility_service_config
+xml file_paths
+xml network_security_config

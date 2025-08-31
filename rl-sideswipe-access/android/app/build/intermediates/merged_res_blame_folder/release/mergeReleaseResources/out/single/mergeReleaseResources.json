@@ -1,0 +1,82 @@
+[
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/xml_network_security_config.xml.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/xml/network_security_config.xml"
+    },
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/mipmap-xxxhdpi_ic_launcher.png.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/mipmap-xxxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/raw_bounce.wav.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/raw/bounce.wav"
+    },
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/mipmap-xxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/raw_approach.wav.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/raw/approach.wav"
+    },
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/drawable_textfield_activated_mtrl_alpha.xml.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/drawable/textfield_activated_mtrl_alpha.xml"
+    },
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/layout_overlay_ball_path.xml.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/layout/overlay_ball_path.xml"
+    },
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/xml_accessibility_service_config.xml.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/xml/accessibility_service_config.xml"
+    },
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/drawable_ic_notification.xml.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/drawable/ic_notification.xml"
+    },
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/mipmap-mdpi_ic_launcher_round.png.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/mipmap-mdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/mipmap-xhdpi_ic_launcher_round.png.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/mipmap-xhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/mipmap-xxhdpi_ic_launcher_round.png.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/mipmap-xxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/mipmap-mdpi_ic_launcher.png.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/mipmap-mdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/mipmap-hdpi_ic_launcher.png.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/mipmap-hdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/mipmap-xxxhdpi_ic_launcher_round.png.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/mipmap-xxxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/drawable_rn_edit_text_material.xml.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/drawable/rn_edit_text_material.xml"
+    },
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/xml_file_paths.xml.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/xml/file_paths.xml"
+    },
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/mipmap-hdpi_ic_launcher_round.png.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/mipmap-hdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/mipmap-xhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.rlsideswipe.access.app-release-44:/drawable_textfield_default_mtrl_alpha.xml.flat",
+        "source": "com.rlsideswipe.access.app-main-45:/drawable/textfield_default_mtrl_alpha.xml"
+    }
+]

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#000000</color>
+    <color name="gray_dark">#333333</color>
+    <color name="gray_light">#F5F5F5</color>
+    <color name="gray_medium">#666666</color>
+    <color name="overlay_ball">#FFFFFF</color>
+    <color name="overlay_outline">#000000</color>
+    <color name="overlay_path">#FFFFFF</color>
+    <color name="primary_blue">#007AFF</color>
+    <color name="primary_red">#FF3B30</color>
+    <color name="white">#FFFFFF</color>
+    <dimen name="abc_edit_text_inset_bottom_material">8dp</dimen>
+    <dimen name="abc_edit_text_inset_horizontal_material">4dp</dimen>
+    <dimen name="abc_edit_text_inset_top_material">8dp</dimen>
+    <integer name="react_native_dev_server_port">8081</integer>
+    <integer name="react_native_inspector_proxy_port">8081</integer>
+    <string name="accessibility_service_description">Helps visually impaired users track and anticipate ball movement in Rocket League Sideswipe by detecting and predicting ball trajectory.</string>
+    <string name="app_name">RL Sideswipe Access</string>
+    <string name="screen_capture_notification_channel_description">Notifications for screen capture service</string>
+    <string name="screen_capture_notification_channel_name">Screen Capture</string>
+    <string name="screen_capture_notification_text">Monitoring for Rocket League - Service running</string>
+    <string name="screen_capture_notification_title">RL Sideswipe Access</string>
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        
+        <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
+    </style>
+</resources>

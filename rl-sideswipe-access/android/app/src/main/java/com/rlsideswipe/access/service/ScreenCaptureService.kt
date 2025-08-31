@@ -248,11 +248,8 @@ class ScreenCaptureService : Service() {
             Log.d(TAG, "📱 Corrected: ${screenWidth}x${screenHeight}")
             Log.d(TAG, "📱 Orientation: ${if (isLandscapeMode) "LANDSCAPE" else "PORTRAIT"} (forced for RL)")
 
-            // Ensure overlay is started or updated with correct screen info
-            if (predictionOverlayService == null) {
-                startPredictionOverlay()
-            }
-            // Screen info updates now flow via LiveData observers
+            // Accessibility overlay handles rendering via LiveData observers
+            // Do not start PredictionOverlayService here to avoid duplicate overlays
             
             // Use RGBA_8888 for stability (avoid complex YUV conversion crashes)
             val format = PixelFormat.RGBA_8888
@@ -646,9 +643,9 @@ class ScreenCaptureService : Service() {
                                 
                                 // Create Detection object for the ball
                                 val ballDetection = Detection(
-                                    cx = bestX / width,
-                                    cy = bestY / height,
-                                    r = bestBall.radius / width.coerceAtLeast(height),
+                                    cx = bestX,
+                                    cy = bestY,
+                                    r = bestBall.radius,
                                     conf = confidence
                                 )
                                 
@@ -666,9 +663,9 @@ class ScreenCaptureService : Service() {
                     
                     // Return current position even without prediction for debugging
                     val ballDetection = Detection(
-                        cx = bestX / width,
-                        cy = bestY / height,
-                        r = bestBall.radius / width.coerceAtLeast(height),
+                        cx = bestX,
+                        cy = bestY,
+                        r = bestBall.radius,
                         conf = confidence
                     )
                     
@@ -704,9 +701,9 @@ class ScreenCaptureService : Service() {
                 Log.d(TAG, "🎯 Found dark ball at (${bestDark.x}, ${bestDark.y})")
                 return FrameResult(
                     Detection(
-                        cx = bestDark.x / width,
-                        cy = bestDark.y / height,
-                        r = bestDark.radius / width,
+                        cx = bestDark.x,
+                        cy = bestDark.y,
+                        r = bestDark.radius,
                         conf = bestDark.confidence
                     ),
                     System.nanoTime()
@@ -720,9 +717,9 @@ class ScreenCaptureService : Service() {
                 Log.d(TAG, "🎯 Found edge ball at (${bestEdge.x}, ${bestEdge.y})")
                 return FrameResult(
                     Detection(
-                        cx = bestEdge.x / width,
-                        cy = bestEdge.y / height,
-                        r = bestEdge.radius / width,
+                        cx = bestEdge.x,
+                        cy = bestEdge.y,
+                        r = bestEdge.radius,
                         conf = bestEdge.confidence
                     ),
                     System.nanoTime()
@@ -736,9 +733,9 @@ class ScreenCaptureService : Service() {
                 Log.d(TAG, "🎯 Found blob ball at (${bestBlob.x}, ${bestBlob.y})")
                 return FrameResult(
                     Detection(
-                        cx = bestBlob.x / width,
-                        cy = bestBlob.y / height,
-                        r = bestBlob.radius / width,
+                        cx = bestBlob.x,
+                        cy = bestBlob.y,
+                        r = bestBlob.radius,
                         conf = bestBlob.confidence
                     ),
                     System.nanoTime()
@@ -1766,7 +1763,7 @@ class ScreenCaptureService : Service() {
                 
                 val notification = NotificationCompat.Builder(this, CHANNEL_ID)
                     .setContentTitle("RL Sideswipe Access - BALL DETECTED!")
-                    .setContentText("🎯 Ball at (${(it.cx * 100).toInt()}%, ${(it.cy * 100).toInt()}%) | Conf: ${(it.conf * 100).toInt()}% | History: ${ballHistory.size}$velocityInfo")
+                    .setContentText("🎯 Ball at (${(it.cx / screenWidth * 100).toInt()}%, ${(it.cy / screenHeight * 100).toInt()}%) | Conf: ${(it.conf * 100).toInt()}% | History: ${ballHistory.size}$velocityInfo")
                     .setSmallIcon(R.drawable.ic_notification)
                     .setOngoing(true)
                     .setPriority(NotificationCompat.PRIORITY_LOW)

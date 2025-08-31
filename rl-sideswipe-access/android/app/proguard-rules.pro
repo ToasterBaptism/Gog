@@ -29,11 +29,11 @@
   @com.facebook.react.bridge.ReactMethod <methods>;
 }
 
-# TensorFlow Lite (removed)
-# -keep class org.tensorflow.lite.** { *; }
-# -keep class org.tensorflow.lite.gpu.** { *; }
-# -keep class org.tensorflow.lite.support.** { *; }
-# -dontwarn org.tensorflow.lite.gpu.**
+# TensorFlow Lite - keep rules to prevent removal/obfuscation of reflective APIs and native bindings
+-keep class org.tensorflow.lite.** { *; }
+-keep class org.tensorflow.lite.gpu.** { *; }
+-keep class org.tensorflow.lite.support.** { *; }
+-dontwarn org.tensorflow.lite.gpu.**
 
 # MediaPipe
 -keep class com.google.mediapipe.** { *; }

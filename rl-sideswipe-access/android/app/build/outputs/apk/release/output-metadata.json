@@ -1,0 +1,37 @@
+{
+  "version": 3,
+  "artifactType": {
+    "type": "APK",
+    "kind": "Directory"
+  },
+  "applicationId": "com.rlsideswipe.access",
+  "variantName": "release",
+  "elements": [
+    {
+      "type": "SINGLE",
+      "filters": [],
+      "attributes": [],
+      "versionCode": 18,
+      "versionName": "2.25",
+      "outputFile": "RL-Sideswipe-Access-v2.25-tflite-release.apk"
+    }
+  ],
+  "elementType": "File",
+  "baselineProfiles": [
+    {
+      "minApi": 28,
+      "maxApi": 30,
+      "baselineProfiles": [
+        "baselineProfiles/1/RL-Sideswipe-Access-v2.25-tflite-release.dm"
+      ]
+    },
+    {
+      "minApi": 31,
+      "maxApi": 2147483647,
+      "baselineProfiles": [
+        "baselineProfiles/0/RL-Sideswipe-Access-v2.25-tflite-release.dm"
+      ]
+    }
+  ],
+  "minSdkVersionForDexing": 30
+}

@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.rlsideswipe.access.app-mergeReleaseResources-42:/values-w600dp-land-v13/values-w600dp-land-v13.xml",
+            "map": [
+                {
+                    "source": "/root/.gradle/caches/transforms-4/d58bed35f0221419dd40102eae0ad013/transformed/material-1.12.0/res/values-w600dp-land-v13/values-w600dp-land-v13.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "54",
+                        "endOffsets": "105"
+                    }
+                }
+            ]
+        }
+    ]
+}
