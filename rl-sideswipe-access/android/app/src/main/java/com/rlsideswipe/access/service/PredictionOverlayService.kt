@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -107,7 +108,6 @@ class PredictionOverlayService : Service() {
                     WindowManager.LayoutParams.TYPE_PHONE
                 },
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                         WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT
@@ -157,6 +157,12 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
     }
     
     private var predictions: List<PredictionOverlayService.PredictionPoint> = emptyList()
+    
+    // Manual override functionality
+    private var manualBallPosition: Pair<Float, Float>? = null
+    private var isManualMode = false
+    private var isDragging = false
+    private val touchRadius = 100f // Touch detection radius around ball
     
     // Screen info for coordinate transformations
     private var screenWidth = 0
@@ -249,29 +255,38 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
         canvas.drawText("Screen: ${screenWidth}x${screenHeight}", 50f, height - 100f, textPaint)
         canvas.drawText("Points: ${predictions.size}", 50f, height - 50f, textPaint)
         
-        if (predictions.isEmpty()) {
-            Log.d(TAG, "🎨 OVERLAY VIEW: No predictions to draw, but test elements should be visible")
-            return
-        }
-        
         try {
-            // Draw current ball position indicator (large circle for debugging)
-            if (predictions.isNotEmpty()) {
+            // Draw current ball position indicator - either from detection or manual override
+            val (ballX, ballY) = if (isManualMode && manualBallPosition != null) {
+                // Use manual position directly (already in overlay coordinates)
+                manualBallPosition!!
+            } else if (predictions.isNotEmpty()) {
+                // Use detected position (transform from screen coordinates)
                 val currentPos = predictions[0]
-                val (transformedX, transformedY) = transformCoordinates(currentPos.x, currentPos.y)
+                transformCoordinates(currentPos.x, currentPos.y)
+            } else {
+                // No ball position available
+                null to null
+            }
+            
+            if (ballX != null && ballY != null) {
                 
-                // Draw VERY VISIBLE ball indicator - bright magenta square (like you mentioned)
-                paint.color = Color.argb(255, 255, 0, 255) // Bright magenta - fully opaque
+                // Draw VERY VISIBLE ball indicator - different colors for manual vs detected
+                if (isManualMode) {
+                    paint.color = Color.argb(255, 255, 255, 0) // Bright yellow for manual mode
+                } else {
+                    paint.color = Color.argb(255, 255, 0, 255) // Bright magenta for detected
+                }
                 paint.style = Paint.Style.FILL
                 paint.strokeWidth = 0f
                 
                 // Draw large filled square (easier to see than circle)
                 val squareSize = 40f
                 canvas.drawRect(
-                    transformedX - squareSize/2, 
-                    transformedY - squareSize/2,
-                    transformedX + squareSize/2, 
-                    transformedY + squareSize/2, 
+                    ballX - squareSize/2, 
+                    ballY - squareSize/2,
+                    ballX + squareSize/2, 
+                    ballY + squareSize/2, 
                     paint
                 )
                 
@@ -280,32 +295,30 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
                 paint.strokeWidth = 4f
                 paint.color = Color.WHITE
                 canvas.drawRect(
-                    transformedX - squareSize/2, 
-                    transformedY - squareSize/2,
-                    transformedX + squareSize/2, 
-                    transformedY + squareSize/2, 
+                    ballX - squareSize/2, 
+                    ballY - squareSize/2,
+                    ballX + squareSize/2, 
+                    ballY + squareSize/2, 
                     paint
                 )
                 
                 // Draw crosshair at center
                 paint.strokeWidth = 3f
                 paint.color = Color.WHITE
-                canvas.drawLine(transformedX - 25f, transformedY, transformedX + 25f, transformedY, paint)
-                canvas.drawLine(transformedX, transformedY - 25f, transformedX, transformedY + 25f, paint)
+                canvas.drawLine(ballX - 25f, ballY, ballX + 25f, ballY, paint)
+                canvas.drawLine(ballX, ballY - 25f, ballX, ballY + 25f, paint)
                 
-                // Also draw raw coordinates in different color for comparison (smaller)
-                paint.color = Color.argb(180, 0, 255, 255) // Cyan - raw coordinates
-                paint.style = Paint.Style.FILL
-                val rawSquareSize = 20f
-                canvas.drawRect(
-                    currentPos.x - rawSquareSize/2, 
-                    currentPos.y - rawSquareSize/2,
-                    currentPos.x + rawSquareSize/2, 
-                    currentPos.y + rawSquareSize/2, 
-                    paint
-                )
+                // Add text indicator for manual mode
+                if (isManualMode) {
+                    val modePaint = Paint().apply {
+                        color = Color.YELLOW
+                        textSize = 30f
+                        isAntiAlias = true
+                    }
+                    canvas.drawText("MANUAL", ballX - 40f, ballY - 50f, modePaint)
+                }
                 
-                Log.d(TAG, "🎯 Ball indicator: screen(${"%.1f".format(currentPos.x)},${"%.1f".format(currentPos.y)}) -> overlay(${"%.1f".format(transformedX)},${"%.1f".format(transformedY)})")
+                Log.d(TAG, "🎯 Ball indicator: (${ballX.toInt()}, ${ballY.toInt()}) ${if (isManualMode) "MANUAL" else "DETECTED"}")
                 Log.d(TAG, "🖼️ Canvas dimensions: ${canvas.width}x${canvas.height}")
             }
             
@@ -406,4 +419,69 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
             Log.e(TAG, "Error drawing prediction overlay", e)
         }
     }
+    
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                val touchX = event.x
+                val touchY = event.y
+                
+                // Check if touching near current ball position or anywhere to start manual mode
+                val currentBallPos = if (predictions.isNotEmpty()) {
+                    val current = predictions.first()
+                    transformCoordinates(current.x, current.y)
+                } else {
+                    manualBallPosition ?: Pair(touchX, touchY)
+                }
+                
+                val distance = kotlin.math.sqrt(
+                    (touchX - currentBallPos.first) * (touchX - currentBallPos.first) +
+                    (touchY - currentBallPos.second) * (touchY - currentBallPos.second)
+                )
+                
+                if (distance <= touchRadius || manualBallPosition != null) {
+                    isDragging = true
+                    isManualMode = true
+                    manualBallPosition = Pair(touchX, touchY)
+                    Log.d(TAG, "🖱️ Manual mode activated: Ball position set to ($touchX, $touchY)")
+                    invalidate()
+                    return true
+                }
+            }
+            
+            MotionEvent.ACTION_MOVE -> {
+                if (isDragging) {
+                    manualBallPosition = Pair(event.x, event.y)
+                    Log.d(TAG, "🖱️ Manual ball dragged to (${event.x}, ${event.y})")
+                    invalidate()
+                    return true
+                }
+            }
+            
+            MotionEvent.ACTION_UP -> {
+                if (isDragging) {
+                    isDragging = false
+                    Log.d(TAG, "🖱️ Manual drag ended. Ball position: ${manualBallPosition}")
+                    // Keep manual mode active until user double-taps to disable
+                    return true
+                }
+            }
+        }
+        return super.onTouchEvent(event)
+    }
+    
+    // Method to disable manual mode (can be called from service)
+    fun disableManualMode() {
+        isManualMode = false
+        manualBallPosition = null
+        isDragging = false
+        Log.d(TAG, "🖱️ Manual mode disabled")
+        invalidate()
+    }
+    
+    // Method to check if in manual mode
+    fun isInManualMode(): Boolean = isManualMode
+    
+    // Get manual ball position for detection service
+    fun getManualBallPosition(): Pair<Float, Float>? = manualBallPosition
 }

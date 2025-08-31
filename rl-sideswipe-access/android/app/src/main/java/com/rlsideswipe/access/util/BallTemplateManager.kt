@@ -16,8 +16,8 @@ class BallTemplateManager(private val context: Context) {
     companion object {
         private const val TAG = "BallTemplateManager"
         private const val TEMPLATE_FOLDER = "ball_templates"
-        private const val SIMILARITY_THRESHOLD = 0.35f // Even lower threshold for better detection
-        private const val FALSE_POSITIVE_THRESHOLD = 0.99f // Perfect matches are suspicious
+        private const val SIMILARITY_THRESHOLD = 0.15f // EXTREMELY low threshold for debugging
+        private const val FALSE_POSITIVE_THRESHOLD = 1.1f // Allow perfect matches (disabled)
         private const val MAX_HORIZONTAL_MATCHES = 10 // Max matches in same Y band
         private const val REGULAR_SPACING_THRESHOLD = 6 // UI elements have regular spacing
     }
@@ -455,7 +455,15 @@ class BallTemplateManager(private val context: Context) {
                 }
             }
             
-            Log.d(TAG, "🔍 Template ${template.name} scale ${scale}: checked $totalChecks positions, best similarity = ${String.format("%.3f", bestSimilarity)} at ($bestX, $bestY)")
+            Log.d(TAG, "🔍 Template ${template.name} scale ${scale}: checked $totalChecks positions")
+            Log.d(TAG, "🔍   Best similarity = ${String.format("%.3f", bestSimilarity)} at ($bestX, $bestY)")
+            Log.d(TAG, "🔍   Threshold = ${SIMILARITY_THRESHOLD}, False positive = ${FALSE_POSITIVE_THRESHOLD}")
+            Log.d(TAG, "🔍   Matches found this scale: ${matches.size}")
+            
+            // Log some sample similarity values for debugging
+            if (bestSimilarity > 0.05f) {
+                Log.d(TAG, "🔍   POTENTIAL DETECTION: Best similarity ${String.format("%.3f", bestSimilarity)} ${if (bestSimilarity >= SIMILARITY_THRESHOLD) "PASSES" else "FAILS"} threshold")
+            }
             
             scaledTemplate.recycle()
         }
@@ -663,8 +671,8 @@ class BallTemplateManager(private val context: Context) {
             val avgColorSimilarity = colorSimilarity / pixelCount
             val avgTextureSimilarity = textureSimilarity / pixelCount
             
-            // Weighted combination: more balanced for dark balls (less reliance on color)
-            return (avgColorSimilarity * 0.55f + avgTextureSimilarity * 0.45f).coerceIn(0f, 1f)
+            // DEBUGGING: Rely much more on texture/shape, less on color
+            return (avgColorSimilarity * 0.20f + avgTextureSimilarity * 0.80f).coerceIn(0f, 1f)
             
         } catch (e: Exception) {
             Log.e(TAG, "Error calculating similarity", e)
@@ -679,38 +687,27 @@ class BallTemplateManager(private val context: Context) {
     private fun isMetallicGrayColor(red: Int, green: Int, blue: Int): Boolean {
         val avgColor = (red + green + blue) / 3
         
-        // Expanded range to include very dark balls and medium gray balls
-        val isInBallRange = avgColor in 25..200 // Even wider range including bright gray balls
+        // EXTREMELY PERMISSIVE for debugging - accept almost any color
+        val isInBallRange = avgColor in 10..250 // Accept almost any brightness
         
-        // Color balance check: RL ball has slight blue-gray tint
+        // Very permissive color balance check
         val colorVariance = maxOf(abs(red - green), abs(green - blue), abs(red - blue))
-        val isGrayish = colorVariance < 50 // More permissive variance
+        val isGrayish = colorVariance < 80 // Very permissive variance
         
-        // Blue-gray tint characteristic of RL ball (more permissive)
-        val hasBlueGrayTint = blue >= red - 15 && blue >= green - 15 && blue <= red + 35 && blue <= green + 35
+        // Accept any reasonable color combination
+        val hasAnyTint = true // Accept any color for debugging
         
-        // White spot detection (bright reflective elements)
-        val isWhiteSpot = avgColor > 180 && colorVariance < 25 && 
-                         red > 160 && green > 160 && blue > 160
+        // Accept any bright colors
+        val isAnyBright = avgColor > 120
         
-        // Dark grid line detection (hexagonal pattern) - expanded for very dark balls
-        val isDarkGrid = avgColor in 20..120 && colorVariance < 40 &&
-                        red in 15..130 && green in 15..130 && blue in 15..140
+        // Accept any dark colors  
+        val isAnyDark = avgColor < 150
         
-        // Metallic highlight detection (3D shading)
-        val isMetallicHighlight = avgColor in 140..200 && colorVariance < 40 &&
-                                 hasBlueGrayTint
+        // Accept any medium colors
+        val isAnyMedium = avgColor in 50..200
         
-        // Very dark ball detection (like in user's screenshot)
-        val isVeryDarkBall = avgColor in 25..80 && colorVariance < 35 &&
-                            red in 20..90 && green in 20..90 && blue in 20..100
-        
-        // Medium gray ball detection (like in user's new screenshot)
-        val isMediumGrayBall = avgColor in 100..160 && colorVariance < 40 &&
-                              red in 80..180 && green in 80..180 && blue in 80..190
-        
-        return (isInBallRange && isGrayish) || 
-               isWhiteSpot || isDarkGrid || isMetallicHighlight || isVeryDarkBall || isMediumGrayBall
+        // DEBUGGING: Accept almost everything to see what we're missing
+        return isInBallRange || isAnyBright || isAnyDark || isAnyMedium
     }
     
     /**

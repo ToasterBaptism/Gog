@@ -246,3 +246,118 @@ ConnectionResetError: [Errno 104] Connection reset by peer
 ----------------------------------------
 10.2.45.9 - - [31/Aug/2025 01:19:44] "GET / HTTP/1.1" 304 -
 10.2.45.9 - - [31/Aug/2025 01:22:43] "GET / HTTP/1.1" 304 -
+10.2.24.16 - - [31/Aug/2025 01:31:35] "GET / HTTP/1.1" 200 -
+10.2.0.161 - - [31/Aug/2025 01:31:47] "HEAD /RL-Sideswipe-Access-v2.21-OVERLAY-SYNC-FIXED-stub-release.apk HTTP/1.1" 200 -
+10.2.24.16 - - [31/Aug/2025 01:32:15] "GET / HTTP/1.1" 200 -
+10.2.24.16 - - [31/Aug/2025 01:32:24] "GET /RL-Sideswipe-Access-v2.21-LARGE-BALL-DETECTION-stub-release.apk HTTP/1.1" 200 -
+10.2.24.16 - - [31/Aug/2025 01:32:24] "GET /RL-Sideswipe-Access-v2.21-LARGE-BALL-DETECTION-stub-release.apk HTTP/1.1" 200 -
+10.2.24.16 - - [31/Aug/2025 01:32:24] "GET /RL-Sideswipe-Access-v2.21-LARGE-BALL-DETECTION-stub-release.apk HTTP/1.1" 200 -
+----------------------------------------
+Exception occurred during processing of request from ('10.2.24.16', 57388)
+Traceback (most recent call last):
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 1311, in finish_request
+    self.RequestHandlerClass(request, client_address, self,
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 672, in __init__
+    super().__init__(*args, **kwargs)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/socketserver.py", line 766, in __init__
+    self.handle()
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+----------------------------------------
+Exception occurred during processing of request from ('10.2.24.16', 57374)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 679, in do_GET
+    self.copyfile(f, self.wfile)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 878, in copyfile
+    shutil.copyfileobj(source, outputfile)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/shutil.py", line 204, in copyfileobj
+    fdst_write(buf)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/socketserver.py", line 845, in write
+    self._sock.sendall(b)
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+Traceback (most recent call last):
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 1311, in finish_request
+    self.RequestHandlerClass(request, client_address, self,
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 672, in __init__
+    super().__init__(*args, **kwargs)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/socketserver.py", line 766, in __init__
+    self.handle()
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 679, in do_GET
+    self.copyfile(f, self.wfile)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 878, in copyfile
+    shutil.copyfileobj(source, outputfile)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/shutil.py", line 204, in copyfileobj
+    fdst_write(buf)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/socketserver.py", line 845, in write
+    self._sock.sendall(b)
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+10.2.24.16 - - [31/Aug/2025 01:32:28] "GET /RL-Sideswipe-Access-v2.21-OVERLAY-SYNC-FIXED-stub-release.apk HTTP/1.1" 200 -
+10.2.24.16 - - [31/Aug/2025 01:32:28] "GET /RL-Sideswipe-Access-v2.21-OVERLAY-SYNC-FIXED-stub-release.apk HTTP/1.1" 200 -
+10.2.24.16 - - [31/Aug/2025 01:32:28] "GET /RL-Sideswipe-Access-v2.21-OVERLAY-SYNC-FIXED-stub-release.apk HTTP/1.1" 200 -
+----------------------------------------
+Exception occurred during processing of request from ('10.2.24.16', 57412)
+----------------------------------------
+Exception occurred during processing of request from ('10.2.24.16', 57410)
+Traceback (most recent call last):
+Traceback (most recent call last):
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 1311, in finish_request
+    self.RequestHandlerClass(request, client_address, self,
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 672, in __init__
+    super().__init__(*args, **kwargs)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 1311, in finish_request
+    self.RequestHandlerClass(request, client_address, self,
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 672, in __init__
+    super().__init__(*args, **kwargs)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/socketserver.py", line 766, in __init__
+    self.handle()
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/socketserver.py", line 766, in __init__
+    self.handle()
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 679, in do_GET
+    self.copyfile(f, self.wfile)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 679, in do_GET
+    self.copyfile(f, self.wfile)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 878, in copyfile
+    shutil.copyfileobj(source, outputfile)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/http/server.py", line 878, in copyfile
+    shutil.copyfileobj(source, outputfile)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/shutil.py", line 204, in copyfileobj
+    fdst_write(buf)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/shutil.py", line 204, in copyfileobj
+    fdst_write(buf)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/socketserver.py", line 845, in write
+    self._sock.sendall(b)
+  File "/openhands/micromamba/envs/openhands/lib/python3.12/socketserver.py", line 845, in write
+    self._sock.sendall(b)
+ConnectionResetError: [Errno 104] Connection reset by peer
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+----------------------------------------
+10.2.0.161 - - [31/Aug/2025 01:35:49] "GET / HTTP/1.1" 304 -
+10.2.0.161 - - [31/Aug/2025 01:37:33] "GET / HTTP/1.1" 304 -
+10.2.24.16 - - [31/Aug/2025 01:38:28] "GET / HTTP/1.1" 304 -
+10.2.24.16 - - [31/Aug/2025 01:41:16] "GET / HTTP/1.1" 304 -
+10.2.24.16 - - [31/Aug/2025 01:42:43] "GET / HTTP/1.1" 304 -
+10.2.24.16 - - [31/Aug/2025 01:44:25] "GET / HTTP/1.1" 200 -
