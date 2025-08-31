@@ -498,24 +498,40 @@ class ScreenCaptureService : Service() {
             
             Log.d(TAG, "🔍 DETECTION RESULTS: ${templateMatches.size} template matches found")
             
-            // 🎯 OVERLAY UPDATE: Show template matches or test points
+            // 🎯 OVERLAY UPDATE: Show template matches with proper coordinate transformation
             if (templateMatches.isNotEmpty()) {
-                Log.d(TAG, "🎯 TEMPLATE MATCHES FOUND: ${templateMatches.size} matches - showing ball detection points")
+                Log.d(TAG, "🎯 TEMPLATE MATCHES FOUND: ${templateMatches.size} matches - transforming coordinates for overlay")
                 templateMatches.forEachIndexed { index, match ->
-                    Log.d(TAG, "🎯 Match #${index+1}: (${match.x.toInt()}, ${match.y.toInt()}) confidence=${String.format("%.3f", match.confidence)}")
+                    Log.d(TAG, "🎯 Match #${index+1}: bitmap(${match.x.toInt()}, ${match.y.toInt()}) confidence=${String.format("%.3f", match.confidence)}")
                 }
                 
-                // Combine template matches with test points for debugging
+                // Transform bitmap coordinates to screen coordinates
+                val bitmapWidth = bitmap.width.toFloat()
+                val bitmapHeight = bitmap.height.toFloat()
+                val scaleX = screenWidth.toFloat() / bitmapWidth
+                val scaleY = screenHeight.toFloat() / bitmapHeight
+                
+                Log.d(TAG, "🔄 COORDINATE TRANSFORMATION:")
+                Log.d(TAG, "🔄 Bitmap: ${bitmapWidth.toInt()}x${bitmapHeight.toInt()} -> Screen: ${screenWidth}x${screenHeight}")
+                Log.d(TAG, "🔄 Scale factors: X=${"%.3f".format(scaleX)}, Y=${"%.3f".format(scaleY)}")
+                
                 val isTflite = try { com.rlsideswipe.access.BuildConfig.FLAVOR?.contains("tflite") == true } catch (e: Exception) { false }
                 val overlayPoints = if (isTflite) {
                     templateMatches.map { match ->
-                        PredictionOverlayService.PredictionPoint(match.x, match.y, 0f)
+                        val screenX = match.x * scaleX
+                        val screenY = match.y * scaleY
+                        Log.d(TAG, "🔄 Transformed: bitmap(${match.x.toInt()},${match.y.toInt()}) -> screen(${"%.1f".format(screenX)},${"%.1f".format(screenY)})")
+                        PredictionOverlayService.PredictionPoint(screenX, screenY, 0f)
                     }
                 } else {
                     val points = mutableListOf<PredictionOverlayService.PredictionPoint>()
                     points.addAll(templateMatches.map { match ->
-                        PredictionOverlayService.PredictionPoint(match.x, match.y, 0f)
+                        val screenX = match.x * scaleX
+                        val screenY = match.y * scaleY
+                        Log.d(TAG, "🔄 Transformed: bitmap(${match.x.toInt()},${match.y.toInt()}) -> screen(${"%.1f".format(screenX)},${"%.1f".format(screenY)})")
+                        PredictionOverlayService.PredictionPoint(screenX, screenY, 0f)
                     })
+                    // Add test points in screen coordinates
                     points.add(PredictionOverlayService.PredictionPoint(screenWidth * 0.1f, screenHeight * 0.1f, 2f))
                     points.add(PredictionOverlayService.PredictionPoint(screenWidth * 0.5f, screenHeight * 0.5f, 1f))
                     points.add(PredictionOverlayService.PredictionPoint(screenWidth * 0.9f, screenHeight * 0.9f, 2f))

@@ -24,8 +24,14 @@ class PredictionOverlayService : Service() {
         fun updatePredictions(predictions: List<PredictionPoint>) {
             Log.d(TAG, "🎯 OVERLAY: Received ${predictions.size} predictions to display")
             predictions.forEachIndexed { index, pred ->
-                Log.d(TAG, "🎯 OVERLAY: Point $index: (${pred.x}, ${pred.y})")
+                Log.d(TAG, "🎯 OVERLAY: Point $index: screen(${pred.x}, ${pred.y}) time=${pred.time}")
             }
+            
+            if (instance == null) {
+                Log.w(TAG, "⚠️ OVERLAY: Service instance is null! Overlay may not be running.")
+                return
+            }
+            
             instance?.updatePrediction(predictions)
         }
         
@@ -190,7 +196,7 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
         Log.d(TAG, "🖥️ Screen info updated: ${width}x${height}, landscape: $isLandscape")
     }
     
-    // Transform detection coordinates to overlay coordinates
+    // Transform screen coordinates to overlay coordinates
     private fun transformCoordinates(x: Float, y: Float): Pair<Float, Float> {
         // Get current view dimensions
         val viewWidth = width.toFloat()
@@ -199,27 +205,23 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
         Log.d(TAG, "🔍 COORDINATE DEBUG:")
         Log.d(TAG, "  📱 Screen info: ${screenWidth}x${screenHeight}, landscape: $isLandscapeMode")
         Log.d(TAG, "  📺 View dimensions: ${viewWidth}x${viewHeight}")
-        Log.d(TAG, "  🎯 Input coordinates: ($x, $y)")
-        
-        if (screenWidth == 0 || screenHeight == 0) {
-            Log.w(TAG, "  ⚠️ No screen info available, using coordinates as-is")
-            return Pair(x, y)
-        }
+        Log.d(TAG, "  🎯 Input coordinates (already in screen space): ($x, $y)")
         
         if (viewWidth == 0f || viewHeight == 0f) {
             Log.w(TAG, "  ⚠️ View not ready, using coordinates as-is")
             return Pair(x, y)
         }
         
-        // Scale coordinates from detection resolution to overlay resolution
+        // Since coordinates are now already in screen space, we just need to scale to view size
+        // Most of the time, view size should match screen size for full-screen overlay
         val scaleX = viewWidth / screenWidth.toFloat()
         val scaleY = viewHeight / screenHeight.toFloat()
         
         val transformedX = x * scaleX
         val transformedY = y * scaleY
         
-        Log.d(TAG, "  🔄 Scale factors: X=$scaleX, Y=$scaleY")
-        Log.d(TAG, "  ✅ Transformed: ($x,$y) -> ($transformedX,$transformedY)")
+        Log.d(TAG, "  🔄 Scale factors: X=${"%.3f".format(scaleX)}, Y=${"%.3f".format(scaleY)}")
+        Log.d(TAG, "  ✅ Final overlay coords: (${"%.1f".format(x)},${"%.1f".format(y)}) -> (${"%.1f".format(transformedX)},${"%.1f".format(transformedY)})")
         
         return Pair(transformedX, transformedY)
     }
@@ -258,23 +260,52 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
                 val currentPos = predictions[0]
                 val (transformedX, transformedY) = transformCoordinates(currentPos.x, currentPos.y)
                 
-                // Draw both raw and transformed positions for comparison
-                paint.color = Color.argb(200, 255, 0, 255) // Bright magenta - transformed
+                // Draw VERY VISIBLE ball indicator - bright magenta square (like you mentioned)
+                paint.color = Color.argb(255, 255, 0, 255) // Bright magenta - fully opaque
+                paint.style = Paint.Style.FILL
+                paint.strokeWidth = 0f
+                
+                // Draw large filled square (easier to see than circle)
+                val squareSize = 40f
+                canvas.drawRect(
+                    transformedX - squareSize/2, 
+                    transformedY - squareSize/2,
+                    transformedX + squareSize/2, 
+                    transformedY + squareSize/2, 
+                    paint
+                )
+                
+                // Draw border around square
                 paint.style = Paint.Style.STROKE
-                paint.strokeWidth = 8f
-                canvas.drawCircle(transformedX, transformedY, 30f, paint) // Large circle around detected ball
-                
-                // Draw crosshair at transformed position
                 paint.strokeWidth = 4f
-                canvas.drawLine(transformedX - 20f, transformedY, transformedX + 20f, transformedY, paint)
-                canvas.drawLine(transformedX, transformedY - 20f, transformedX, transformedY + 20f, paint)
+                paint.color = Color.WHITE
+                canvas.drawRect(
+                    transformedX - squareSize/2, 
+                    transformedY - squareSize/2,
+                    transformedX + squareSize/2, 
+                    transformedY + squareSize/2, 
+                    paint
+                )
                 
-                // Also draw raw coordinates in different color for comparison
-                paint.color = Color.argb(150, 0, 255, 255) // Cyan - raw coordinates
-                paint.strokeWidth = 4f
-                canvas.drawCircle(currentPos.x, currentPos.y, 20f, paint) // Smaller circle for raw position
+                // Draw crosshair at center
+                paint.strokeWidth = 3f
+                paint.color = Color.WHITE
+                canvas.drawLine(transformedX - 25f, transformedY, transformedX + 25f, transformedY, paint)
+                canvas.drawLine(transformedX, transformedY - 25f, transformedX, transformedY + 25f, paint)
                 
-                Log.d(TAG, "🎯 Ball indicator: original(${"%.1f".format(currentPos.x)},${"%.1f".format(currentPos.y)}) -> transformed(${"%.1f".format(transformedX)},${"%.1f".format(transformedY)})")
+                // Also draw raw coordinates in different color for comparison (smaller)
+                paint.color = Color.argb(180, 0, 255, 255) // Cyan - raw coordinates
+                paint.style = Paint.Style.FILL
+                val rawSquareSize = 20f
+                canvas.drawRect(
+                    currentPos.x - rawSquareSize/2, 
+                    currentPos.y - rawSquareSize/2,
+                    currentPos.x + rawSquareSize/2, 
+                    currentPos.y + rawSquareSize/2, 
+                    paint
+                )
+                
+                Log.d(TAG, "🎯 Ball indicator: screen(${"%.1f".format(currentPos.x)},${"%.1f".format(currentPos.y)}) -> overlay(${"%.1f".format(transformedX)},${"%.1f".format(transformedY)})")
                 Log.d(TAG, "🖼️ Canvas dimensions: ${canvas.width}x${canvas.height}")
             }
             
