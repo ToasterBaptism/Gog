@@ -1,17 +1,21 @@
 # Task List
 
-1. ✅ Perform comprehensive scan of all review comments and implementations
+1. ✅ Install Java 17 (OpenJDK) for Android development
 
-2. 🔄 Fix critical service restart and overlay cleanup issues
+2. 🔄 Download and install Android SDK with required API levels
 
-3. ⏳ Fix build.gradle APK naming and resource compilation issues
+3. ⏳ Download and install Android NDK for native development
 
-4. ⏳ Fix UI thread safety issues in MainActivity
+4. ⏳ Install Gradle build system
 
-5. ⏳ Fix bitmap recycling and resource leak issues
+5. ⏳ Install Node.js and npm/yarn for React Native
 
-6. ⏳ Address internal URL exposure and security concerns
+6. ⏳ Install React Native CLI tools
 
-7. ⏳ Final validation that all critical issues are resolved
+7. ⏳ Install additional build tools (cmake, ninja, etc.)
+
+8. ⏳ Configure environment variables and paths
+
+9. ⏳ Test the build setup by attempting to build the APK
 
 

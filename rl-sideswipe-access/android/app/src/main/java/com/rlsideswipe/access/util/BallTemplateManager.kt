@@ -16,7 +16,7 @@ class BallTemplateManager(private val context: Context) {
     companion object {
         private const val TAG = "BallTemplateManager"
         private const val TEMPLATE_FOLDER = "ball_templates"
-        private const val SIMILARITY_THRESHOLD = 0.65f // Lowered threshold for better detection
+        private const val SIMILARITY_THRESHOLD = 0.45f // Much lower threshold for dark balls
         private const val FALSE_POSITIVE_THRESHOLD = 0.99f // Perfect matches are suspicious
         private const val MAX_HORIZONTAL_MATCHES = 10 // Max matches in same Y band
         private const val REGULAR_SPACING_THRESHOLD = 6 // UI elements have regular spacing
@@ -130,13 +130,21 @@ class BallTemplateManager(private val context: Context) {
     }
     
     /**
-     * Create synthetic template as fallback
+     * Create synthetic templates as fallback
      */
     private fun createSyntheticTemplate() {
+        // Create normal synthetic template
         syntheticTemplate = createEnhancedSyntheticBall()
         if (syntheticTemplate != null) {
             ballTemplates.add(BallTemplate("synthetic_fallback", syntheticTemplate!!, 
                 TemplateMetadata("normal", "unknown", "synthetic", 0.7f)))
+        }
+        
+        // Create very dark synthetic template for cases like user's screenshot
+        val darkTemplate = createVeryDarkSyntheticBall()
+        if (darkTemplate != null) {
+            ballTemplates.add(BallTemplate("synthetic_very_dark", darkTemplate, 
+                TemplateMetadata("dark", "unknown", "synthetic", 0.8f)))
         }
     }
     
@@ -196,6 +204,72 @@ class BallTemplateManager(private val context: Context) {
                     val red = (shadedIntensity * 0.88f).toInt().coerceIn(0, 255)
                     val green = (shadedIntensity * 0.92f).toInt().coerceIn(0, 255)
                     val blue = (shadedIntensity * 1.05f).toInt().coerceIn(0, 255)
+                    
+                    val color = (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
+                    template.setPixel(x, y, color)
+                } else {
+                    template.setPixel(x, y, 0x00000000) // Transparent
+                }
+            }
+        }
+        
+        return template
+    }
+    
+    /**
+     * Create very dark synthetic ball template for dark lighting conditions
+     * Based on user's screenshot showing much darker ball
+     */
+    private fun createVeryDarkSyntheticBall(): Bitmap {
+        val size = 60
+        val template = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val centerX = size / 2f
+        val centerY = size / 2f
+        val radius = size / 2.1f
+        
+        for (y in 0 until size) {
+            for (x in 0 until size) {
+                val dx = x - centerX
+                val dy = y - centerY
+                val distance = sqrt(dx * dx + dy * dy)
+                
+                if (distance <= radius) {
+                    val normalizedX = (x - centerX) / radius
+                    val normalizedY = (y - centerY) / radius
+                    
+                    // Much darker base color (like in user's screenshot)
+                    var baseIntensity = 55 // Very dark base
+                    
+                    // Hexagonal grid pattern
+                    val gridSize = 8f
+                    val gridX = (normalizedX * gridSize).toInt()
+                    val gridY = (normalizedY * gridSize).toInt()
+                    
+                    val isGridLine = (gridX + gridY) % 2 == 0 || 
+                                   abs(normalizedX * gridSize - gridX.toFloat()) < 0.15f ||
+                                   abs(normalizedY * gridSize - gridY.toFloat()) < 0.15f
+                    
+                    if (isGridLine) {
+                        baseIntensity -= 10 // Even darker grid lines
+                    }
+                    
+                    // Subtle white spots (much dimmer than normal)
+                    val spotDistance1 = sqrt((normalizedX - 0.3f) * (normalizedX - 0.3f) + (normalizedY - 0.2f) * (normalizedY - 0.2f))
+                    val spotDistance2 = sqrt((normalizedX + 0.2f) * (normalizedX + 0.2f) + (normalizedY + 0.4f) * (normalizedY + 0.4f))
+                    
+                    if (spotDistance1 < 0.15f || spotDistance2 < 0.12f) {
+                        baseIntensity += 25 // Subtle bright spots
+                    }
+                    
+                    // 3D shading effect (very subtle)
+                    val lightAngle = atan2(normalizedY, normalizedX)
+                    val lightFactor = cos(lightAngle - PI/4) * 0.2f + 0.8f
+                    val shadedIntensity = (baseIntensity * lightFactor).toInt()
+                    
+                    // Dark color with slight blue-gray tint
+                    val red = (shadedIntensity * 0.85f).toInt().coerceIn(0, 255)
+                    val green = (shadedIntensity * 0.88f).toInt().coerceIn(0, 255)
+                    val blue = (shadedIntensity * 0.95f).toInt().coerceIn(0, 255)
                     
                     val color = (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
                     template.setPixel(x, y, color)
@@ -465,14 +539,17 @@ class BallTemplateManager(private val context: Context) {
                         val bGreen = (bitmapPixel shr 8) and 0xFF
                         val bBlue = bitmapPixel and 0xFF
                         
-                        // Enhanced boost for RL ball characteristics
+                        // Enhanced boost for RL ball characteristics including dark balls
                         val colorBonus = if (isMetallicGrayColor(bRed, bGreen, bBlue)) {
+                            val avgBrightness = (bRed + bGreen + bBlue) / 3
                             // Extra boost for white spots (reflective elements)
-                            if (bRed > 180 && bGreen > 180 && bBlue > 180) 0.3f
+                            if (bRed > 180 && bGreen > 180 && bBlue > 180) 0.35f
+                            // Strong boost for very dark balls (like in user's screenshot)
+                            else if (avgBrightness in 25..80) 0.40f
                             // Boost for metallic gray base
-                            else if ((bRed + bGreen + bBlue) / 3 in 100..160) 0.25f
+                            else if (avgBrightness in 100..160) 0.25f
                             // Standard boost for other ball colors
-                            else 0.15f
+                            else 0.20f
                         } else 0f
                         
                         val colorDiff = sqrt(
@@ -499,8 +576,8 @@ class BallTemplateManager(private val context: Context) {
             val avgColorSimilarity = colorSimilarity / pixelCount
             val avgTextureSimilarity = textureSimilarity / pixelCount
             
-            // Weighted combination: color is more important for RL ball
-            return (avgColorSimilarity * 0.7f + avgTextureSimilarity * 0.3f).coerceIn(0f, 1f)
+            // Weighted combination: more balanced for dark balls (less reliance on color)
+            return (avgColorSimilarity * 0.55f + avgTextureSimilarity * 0.45f).coerceIn(0f, 1f)
             
         } catch (e: Exception) {
             Log.e(TAG, "Error calculating similarity", e)
@@ -510,35 +587,39 @@ class BallTemplateManager(private val context: Context) {
     
     /**
      * Check if color matches RL Sideswipe ball characteristics
-     * Based on analysis of 10 real ball images
+     * Based on analysis of 10 real ball images + support for very dark balls
      */
     private fun isMetallicGrayColor(red: Int, green: Int, blue: Int): Boolean {
         val avgColor = (red + green + blue) / 3
         
-        // Primary check: Metallic gray range (observed: 95-175)
-        val isInGrayRange = avgColor in 85..185
+        // Expanded range to include very dark balls (like in user's screenshot)
+        val isInBallRange = avgColor in 25..185 // Much wider range including dark balls
         
         // Color balance check: RL ball has slight blue-gray tint
         val colorVariance = maxOf(abs(red - green), abs(green - blue), abs(red - blue))
-        val isGrayish = colorVariance < 35 // Tighter variance for specificity
+        val isGrayish = colorVariance < 50 // More permissive variance
         
-        // Blue-gray tint characteristic of RL ball
-        val hasBlueGrayTint = blue >= red - 5 && blue >= green - 5 && blue <= red + 25 && blue <= green + 25
+        // Blue-gray tint characteristic of RL ball (more permissive)
+        val hasBlueGrayTint = blue >= red - 15 && blue >= green - 15 && blue <= red + 35 && blue <= green + 35
         
         // White spot detection (bright reflective elements)
         val isWhiteSpot = avgColor > 180 && colorVariance < 25 && 
                          red > 160 && green > 160 && blue > 160
         
-        // Dark grid line detection (hexagonal pattern)
-        val isDarkGrid = avgColor in 60..120 && colorVariance < 30 &&
-                        red in 50..130 && green in 50..130 && blue in 50..140
+        // Dark grid line detection (hexagonal pattern) - expanded for very dark balls
+        val isDarkGrid = avgColor in 20..120 && colorVariance < 40 &&
+                        red in 15..130 && green in 15..130 && blue in 15..140
         
         // Metallic highlight detection (3D shading)
         val isMetallicHighlight = avgColor in 140..200 && colorVariance < 40 &&
                                  hasBlueGrayTint
         
-        return (isInGrayRange && isGrayish && hasBlueGrayTint) || 
-               isWhiteSpot || isDarkGrid || isMetallicHighlight
+        // Very dark ball detection (like in user's screenshot)
+        val isVeryDarkBall = avgColor in 25..80 && colorVariance < 35 &&
+                            red in 20..90 && green in 20..90 && blue in 20..100
+        
+        return (isInBallRange && isGrayish) || 
+               isWhiteSpot || isDarkGrid || isMetallicHighlight || isVeryDarkBall
     }
     
     /**
