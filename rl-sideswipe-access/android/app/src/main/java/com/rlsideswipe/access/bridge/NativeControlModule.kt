@@ -688,11 +688,15 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
                 permissions["POST_NOTIFICATIONS"] = ContextCompat.checkSelfPermission(reactApplicationContext, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
             }
             
-            // Install-time permissions
+            // Install-time permissions (with OS-level gating)
             permissions["VIBRATE"] = ContextCompat.checkSelfPermission(reactApplicationContext, Manifest.permission.VIBRATE) == PackageManager.PERMISSION_GRANTED
             permissions["WAKE_LOCK"] = ContextCompat.checkSelfPermission(reactApplicationContext, Manifest.permission.WAKE_LOCK) == PackageManager.PERMISSION_GRANTED
-            permissions["FOREGROUND_SERVICE"] = ContextCompat.checkSelfPermission(reactApplicationContext, Manifest.permission.FOREGROUND_SERVICE) == PackageManager.PERMISSION_GRANTED
-            permissions["FOREGROUND_SERVICE_MEDIA_PROJECTION"] = ContextCompat.checkSelfPermission(reactApplicationContext, Manifest.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION) == PackageManager.PERMISSION_GRANTED
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                permissions["FOREGROUND_SERVICE"] = ContextCompat.checkSelfPermission(reactApplicationContext, Manifest.permission.FOREGROUND_SERVICE) == PackageManager.PERMISSION_GRANTED
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                permissions["FOREGROUND_SERVICE_MEDIA_PROJECTION"] = ContextCompat.checkSelfPermission(reactApplicationContext, Manifest.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION) == PackageManager.PERMISSION_GRANTED
+            }
             permissions["REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"] = ContextCompat.checkSelfPermission(reactApplicationContext, Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS) == PackageManager.PERMISSION_GRANTED
             
             // Special permissions
