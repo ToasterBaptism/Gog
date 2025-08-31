@@ -167,13 +167,13 @@
         
         <!-- Featured Download -->
         <div class="featured-download">
-            <h2><span class="emoji">🛡️</span> LATEST: Safe Manual Controls <span class="new-badge">FIXED!</span></h2>
-            <p><strong>No More Lockouts!</strong> Added proper Accept/Cancel/Exit buttons so you'll never get stuck in manual mode. Safe, user-friendly controls with clear visual feedback!</p>
+            <h2><span class="emoji">🔧</span> LATEST: Critical Overlay Touch Fix <span class="new-badge">FIXED!</span></h2>
+            <p><strong>CRITICAL BUG FIXED!</strong> Overlay no longer blocks all touch events! App now starts with non-touchable overlay that passes touches through to other apps. Manual mode can be enabled when needed.</p>
             
             <div class="download-info">
                 <div class="info-item">
                     <div class="info-label">Version</div>
-                    <div class="info-value">v2.21 Safe Controls</div>
+                    <div class="info-value">v2.22-REVIEW-FIXES</div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">Size</div>
@@ -189,19 +189,19 @@
                 </div>
             </div>
             
-            <a href="RL-Sideswipe-Access-v2.21-STABILITY-ENHANCED-TOUCH-FIXES-stub-release.apk" class="download-btn">
-                📱 Download Latest APK (Stability Enhanced - Touch Fixes)
+            <a href="RL-Sideswipe-Access-v2.22-REVIEW-FIXES-stub-release.apk" class="download-btn">
+                📱 Download Latest APK (Critical Overlay Touch Fix)
             </a>
             
             <div class="changelog">
-                <h3>🔧 Latest Fixes (Stability Enhanced - Touch Fixes):</h3>
+                <h3>🔧 Latest Fixes (Critical Overlay Touch Fix):</h3>
                 <ul>
-                    <li>🛡️ <strong>Enhanced service stability</strong> - Added comprehensive error handling and recovery</li>
-                    <li>🔒 <strong>Overlay permission checks</strong> - Prevent crashes from permission issues</li>
-                    <li>🔄 <strong>Automatic service recovery</strong> - Restore functionality after interruptions</li>
-                    <li>🚨 <strong>Crash-proof touch handling</strong> - Wrapped all touch events in try-catch blocks</li>
-                    <li>✅ <strong>Fixed overlay touch detection</strong> - Added view touch capabilities</li>
-                    <li>✅ <strong>Improved manual dragging</strong> - Increased touch radius to 200px for easier grabbing</li>
+                    <li>🚨 <strong>CRITICAL FIX: Overlay touch blocking resolved</strong> - Overlay no longer captures all touch events</li>
+                    <li>🖱️ <strong>Non-touchable by default</strong> - Overlay starts as non-touchable, passes touches through to other apps</li>
+                    <li>🎛️ <strong>Touch mode toggle</strong> - Enable/disable overlay touchability programmatically</li>
+                    <li>🔧 <strong>Fixed window layout flags</strong> - Added FLAG_NOT_TOUCHABLE and FLAG_NOT_FOCUSABLE by default</li>
+                    <li>📱 <strong>Device interaction restored</strong> - Users can now access system controls, green check, red X, exit buttons</li>
+                    <li>💡 <strong>Visual indicators</strong> - Clear on-screen messages showing overlay touch status</li>
                     <li>✅ <strong>Enhanced button detection</strong> - Added comprehensive logging for button touches</li>
                     <li>✅ <strong>Streamlined manual mode</strong> - Immediate dragging when entering manual mode</li>
                     <li>📊 <strong>File size:</strong> 27.1 MB | <strong>MD5:</strong> 0f8a872092ba62464b24a93b20a058f1</li>
@@ -223,6 +223,46 @@
                     <li><strong>🔒 No Lockouts:</strong> Always have a way to exit or cancel manual mode</li>
                     <li><strong>📸 Template Learning:</strong> Accept button captures 80x80 templates for AI learning</li>
                     <li><strong>🎨 Visual Feedback:</strong> Yellow square = manual mode, buttons appear after positioning</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- TensorFlow Lite Version -->
+        <div class="featured-download" style="background: linear-gradient(45deg, #4CAF50, #45a049);">
+            <h2><span class="emoji">🧠</span> TensorFlow Lite Version <span class="new-badge">AI ENHANCED</span></h2>
+            <p><strong>Full AI Power!</strong> Includes TensorFlow Lite for advanced ball detection and prediction. Same critical overlay touch fix as above.</p>
+            
+            <div class="download-info">
+                <div class="info-item">
+                    <div class="info-label">Version</div>
+                    <div class="info-value">v2.22-REVIEW-FIXES</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Size</div>
+                    <div class="info-value">56 MB</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Build Type</div>
+                    <div class="info-value">TensorFlow Lite</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Updated</div>
+                    <div class="info-value">Just Now</div>
+                </div>
+            </div>
+            
+            <a href="RL-Sideswipe-Access-v2.22-REVIEW-FIXES-tflite-release.apk" class="download-btn">
+                🧠 Download TensorFlow Lite APK (Critical Overlay Touch Fix)
+            </a>
+            
+            <div class="changelog">
+                <h3>🧠 TensorFlow Lite Features:</h3>
+                <ul>
+                    <li>🚨 <strong>Same critical overlay touch fix</strong> - Non-touchable by default, no more device lockouts</li>
+                    <li>🧠 <strong>Advanced AI detection</strong> - TensorFlow Lite models for superior ball tracking</li>
+                    <li>🎯 <strong>Enhanced prediction accuracy</strong> - Machine learning powered trajectory prediction</li>
+                    <li>📊 <strong>Larger file size</strong> - Includes full TensorFlow Lite runtime and models</li>
+                    <li>⚡ <strong>Better performance</strong> - Optimized neural networks for mobile devices</li>
                 </ul>
             </div>
         </div>

@@ -43,10 +43,19 @@ class PredictionOverlayService : Service() {
         fun requestTemplateCapture(x: Float, y: Float) {
             instance?.requestTemplateCapture(x, y)
         }
+        
+        fun enableTouchMode() {
+            instance?.overlayView?.enableTouchMode()
+        }
+        
+        fun disableTouchMode() {
+            instance?.overlayView?.disableTouchMode()
+        }
     }
     
     private var windowManager: WindowManager? = null
     private var overlayView: PredictionOverlayView? = null
+    private var layoutParams: WindowManager.LayoutParams? = null
     
     override fun onBind(intent: Intent?): IBinder? = null
     
@@ -110,7 +119,7 @@ class PredictionOverlayService : Service() {
             windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
             overlayView = PredictionOverlayView(this)
             
-            val layoutParams = WindowManager.LayoutParams(
+            layoutParams = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -121,11 +130,12 @@ class PredictionOverlayService : Service() {
                 },
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                         WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                        WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT
             )
             
-            layoutParams.gravity = Gravity.TOP or Gravity.START
+            layoutParams!!.gravity = Gravity.TOP or Gravity.START
             
             windowManager?.addView(overlayView, layoutParams)
             Log.d(TAG, "Overlay view added to window manager")
@@ -164,6 +174,31 @@ class PredictionOverlayService : Service() {
         Log.d(TAG, "🎯 Requested template capture at ($x, $y)")
     }
     
+    fun setOverlayTouchable(touchable: Boolean) {
+        try {
+            layoutParams?.let { params ->
+                if (touchable) {
+                    // Make overlay touchable - remove NOT_TOUCHABLE and NOT_FOCUSABLE flags
+                    params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+                    params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+                    Log.d(TAG, "🖱️ Overlay made TOUCHABLE - user can interact")
+                } else {
+                    // Make overlay non-touchable - add NOT_TOUCHABLE and NOT_FOCUSABLE flags
+                    params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                    params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                    Log.d(TAG, "🖱️ Overlay made NON-TOUCHABLE - touches pass through")
+                }
+                
+                // Update the overlay with new parameters
+                overlayView?.let { view ->
+                    windowManager?.updateViewLayout(view, params)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating overlay touchability", e)
+        }
+    }
+    
     data class PredictionPoint(
         val x: Float,
         val y: Float,
@@ -178,11 +213,11 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
     }
     
     init {
-        // Make sure the view can receive touch events
-        isClickable = true
-        isFocusable = true
-        isFocusableInTouchMode = true
-        Log.d(TAG, "🖱️ PredictionOverlayView initialized with touch capabilities")
+        // Start as non-touchable - touches will pass through to underlying apps
+        isClickable = false
+        isFocusable = false
+        isFocusableInTouchMode = false
+        Log.d(TAG, "🖱️ PredictionOverlayView initialized as NON-TOUCHABLE - touches pass through")
     }
     
     private var predictions: List<PredictionOverlayService.PredictionPoint> = emptyList()
@@ -198,6 +233,9 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
     private var acceptButtonRect = RectF()
     private var cancelButtonRect = RectF()
     private var exitButtonRect = RectF()
+    
+    // Touch mode control
+    private var touchModeEnabled = false
     private val buttonSize = 120f
     private val buttonMargin = 20f
     
@@ -550,14 +588,36 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
         val instructionY = topY - 60f
         canvas.drawText("Drag yellow square to ball position", width / 2f, instructionY, instructionPaint)
         canvas.drawText("✓ Accept & Learn  ✗ Cancel  EXIT Manual Mode", width / 2f, instructionY - 50f, instructionPaint)
+        
+        // Draw touch mode indicator when not in touch mode
+        if (!touchModeEnabled) {
+            val touchIndicatorPaint = Paint().apply {
+                color = Color.argb(200, 0, 255, 0) // Semi-transparent green
+                textSize = 32f
+                isAntiAlias = true
+                textAlign = Paint.Align.CENTER
+                setShadowLayer(3f, 1f, 1f, Color.BLACK)
+            }
+            
+            // Draw at bottom of screen
+            val indicatorY = height - 100f
+            canvas.drawText("🖱️ OVERLAY NON-TOUCHABLE - Touches pass through", width / 2f, indicatorY, touchIndicatorPaint)
+            canvas.drawText("Use app controls to enable manual ball positioning", width / 2f, indicatorY + 40f, touchIndicatorPaint)
+        }
     }
     
     override fun onTouchEvent(event: MotionEvent): Boolean {
         return try {
+            // Only handle touch events if touch mode is enabled
+            if (!touchModeEnabled) {
+                Log.d(TAG, "🖱️ Touch ignored - touch mode disabled, passing through to underlying app")
+                return false // Let the touch pass through to underlying apps
+            }
+            
             val touchX = event.x
             val touchY = event.y
             
-            Log.d(TAG, "🖱️ TOUCH EVENT: action=${event.action} at ($touchX, $touchY) manual=$isManualMode dragging=$isDragging")
+            Log.d(TAG, "🖱️ TOUCH EVENT: action=${event.action} at ($touchX, $touchY) manual=$isManualMode dragging=$isDragging touchMode=$touchModeEnabled")
         
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
@@ -680,6 +740,9 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
         showControlButtons = false
         Log.d(TAG, "🚪 Exited manual mode completely")
         invalidate()
+        
+        // Also disable touch mode to make overlay non-touchable
+        disableTouchMode()
     }
     
     // Method to disable manual mode (can be called from service)
@@ -692,4 +755,27 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
     
     // Get manual ball position for detection service
     fun getManualBallPosition(): Pair<Float, Float>? = manualBallPosition
+    
+    // Enable touch mode - makes overlay touchable
+    fun enableTouchMode() {
+        touchModeEnabled = true
+        isClickable = true
+        isFocusable = true
+        isFocusableInTouchMode = true
+        service.setOverlayTouchable(true)
+        Log.d(TAG, "🖱️ Touch mode ENABLED - overlay is now touchable")
+    }
+    
+    // Disable touch mode - makes overlay non-touchable
+    fun disableTouchMode() {
+        touchModeEnabled = false
+        isClickable = false
+        isFocusable = false
+        isFocusableInTouchMode = false
+        service.setOverlayTouchable(false)
+        Log.d(TAG, "🖱️ Touch mode DISABLED - overlay is now non-touchable")
+    }
+    
+    // Check if touch mode is enabled
+    fun isTouchModeEnabled(): Boolean = touchModeEnabled
 }

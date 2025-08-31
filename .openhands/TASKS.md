@@ -1,21 +1,13 @@
 # Task List
 
-1. ✅ Analyze remaining unaddressed review comments
+1. ✅ Fix overlay blocking all touch events
 
-2. 🔄 Remove all TensorFlow Lite imports and dependencies
+2. ✅ Add FLAG_NOT_TOUCHABLE by default to overlay
 
-3. ⏳ Fix Gradle build configuration issues (jscFlavor, preBuild hook)
+3. ✅ Implement mechanism to toggle overlay touchability
 
-4. ⏳ Update ProGuard rules for React Native bridge methods
+4. ✅ Fix onTouchEvent to not consume events unnecessarily
 
-5. ⏳ Fix OS-level permission checks in NativeControlModule
-
-6. ⏳ Fix UI thread safety in OverlayRenderer
-
-7. ⏳ Fix StartScreen component lifecycle and memory leaks
-
-8. ⏳ Build and test all fixes
-
-9. ⏳ Push changes to PR branch
+5. 🔄 Test overlay fixes and build new APK
 
 
