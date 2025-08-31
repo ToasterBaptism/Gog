@@ -58,6 +58,7 @@ class PredictionOverlayService : Service() {
         instance = null
         Log.d(TAG, "PredictionOverlayService destroyed")
         removeOverlay()
+        stopForeground(true) // Remove notification
     }
     
     private fun createNotificationChannel() {
@@ -119,7 +120,7 @@ class PredictionOverlayService : Service() {
     private fun removeOverlay() {
         try {
             overlayView?.let { view ->
-                windowManager?.removeView(view)
+                windowManager?.removeViewImmediate(view)
                 overlayView = null
             }
             Log.d(TAG, "Overlay view removed")

@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail  # Enable strict mode to fail fast on errors
 
 # React Native Android Build Script
 # This script sets up the environment and builds the Android app
@@ -17,6 +18,10 @@ echo "JAVA_HOME: $JAVA_HOME"
 echo "ANDROID_HOME: $ANDROID_HOME"
 echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
 echo ""
+
+# Run relative to the script's directory to avoid "wrong working dir" failures
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
 # Check if we're in the right directory
 if [ ! -f "package.json" ]; then

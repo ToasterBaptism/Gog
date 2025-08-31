@@ -73,9 +73,10 @@ implementation "org.tensorflow:tensorflow-lite-support:0.4.4"
 2. **Release Version**: `RL-Sideswipe-Access-v2.18-TENSORFLOW-LITE-RESTORED-release.apk` (56MB)
 
 ### Download URLs:
-- **Debug**: https://work-2-geeubuwrjouvyonf.prod-runtime.all-hands.dev/RL-Sideswipe-Access-v2.18-TENSORFLOW-LITE-RESTORED-debug.apk
-- **Release**: https://work-2-geeubuwrjouvyonf.prod-runtime.all-hands.dev/RL-Sideswipe-Access-v2.18-TENSORFLOW-LITE-RESTORED-release.apk
-- **Download Page**: https://work-2-geeubuwrjouvyonf.prod-runtime.all-hands.dev/
+**INTERNAL ONLY - DO NOT DISTRIBUTE**
+- **Debug**: [Internal development server - contact team for access]
+- **Release**: [Internal development server - contact team for access]  
+- **Download Page**: [Internal development server - contact team for access]
 
 ### HTTP Server Status:
 - Running on port 12001

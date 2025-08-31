@@ -6,12 +6,10 @@
     android:insetBottom="@dimen/abc_edit_text_inset_bottom_material">
 
     <selector>
-        <item android:state_enabled="false">
-            <nine-patch android:src="@drawable/textfield_default_mtrl_alpha"/>
-        </item>
-        <item>
-            <nine-patch android:src="@drawable/textfield_activated_mtrl_alpha"/>
-        </item>
+        <item android:state_enabled="false"
+            android:drawable="@drawable/textfield_default_mtrl_alpha"/>
+        <item
+            android:drawable="@drawable/textfield_activated_mtrl_alpha"/>
     </selector>
 
 </inset>

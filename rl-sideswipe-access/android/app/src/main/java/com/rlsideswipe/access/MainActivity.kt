@@ -95,8 +95,11 @@ class MainActivity : ReactActivity() {
             timeoutHandler.postDelayed(timeoutRunnable, 30000)
             
             Log.d("MainActivity", "Callback set up successfully, launching MediaProjection intent...")
-            mediaProjectionLauncher.launch(captureIntent)
-            Log.d("MainActivity", "MediaProjection intent launched successfully")
+            // Ensure launcher is invoked on the UI thread to avoid IllegalStateException
+            runOnUiThread {
+                mediaProjectionLauncher.launch(captureIntent)
+                Log.d("MainActivity", "MediaProjection intent launched successfully")
+            }
             
         } catch (e: Exception) {
             Log.e("MainActivity", "Exception in requestMediaProjection: ${e.message}", e)

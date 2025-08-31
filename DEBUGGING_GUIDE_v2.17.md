@@ -3,9 +3,10 @@
 ## 📱 APK Downloads
 
 ### 🌐 Download Links
-- **Debug APK (98MB)**: https://work-2-geeubuwrjouvyonf.prod-runtime.all-hands.dev/app-debug.apk
-- **Release APK (49MB)**: https://work-2-geeubuwrjouvyonf.prod-runtime.all-hands.dev/app-release.apk
-- **Download Page**: https://work-2-geeubuwrjouvyonf.prod-runtime.all-hands.dev/
+**INTERNAL ONLY - DO NOT DISTRIBUTE**
+- **Debug APK (98MB)**: [Internal development server - contact team for access]
+- **Release APK (49MB)**: [Internal development server - contact team for access]
+- **Download Page**: [Internal development server - contact team for access]
 
 ### 📋 Version Information
 - **Version**: v2.17 ENHANCED with Critical Overlay Fixes

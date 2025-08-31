@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail  # Enable strict mode to fail fast on errors
 
 # Version Update Script for RL Sideswipe Access
 # Usage: ./update-version.sh <version_name> [description]

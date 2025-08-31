@@ -67,9 +67,17 @@ class SelfHealing(private val context: Context) {
             // Wait a moment before restarting
             handler.postDelayed({
                 try {
-                    // Note: In a real implementation, we would need to store the capture intent
-                    // and restart with the same parameters
-                    Log.d(TAG, "Screen capture service restart attempted")
+                    // Check if we have a stored capture intent to restart with
+                    val sharedPrefs = context.getSharedPreferences("screen_capture", Context.MODE_PRIVATE)
+                    val hasStoredIntent = sharedPrefs.getBoolean("has_capture_intent", false)
+                    
+                    if (hasStoredIntent) {
+                        // In a real implementation, we would need to request MediaProjection again
+                        // For now, just log that restart would be needed
+                        Log.d(TAG, "Screen capture service restart would require new MediaProjection permission")
+                    } else {
+                        Log.d(TAG, "No stored capture intent available for restart")
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to restart screen capture service", e)
                 }

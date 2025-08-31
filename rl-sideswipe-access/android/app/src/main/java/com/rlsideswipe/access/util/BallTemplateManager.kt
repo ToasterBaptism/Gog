@@ -567,7 +567,7 @@ class BallTemplateManager(private val context: Context) {
     fun cleanup() {
         ballTemplates.forEach { it.bitmap.recycle() }
         ballTemplates.clear()
-        syntheticTemplate?.recycle()
+        // syntheticTemplate is already recycled in the forEach loop above, so don't recycle again
         syntheticTemplate = null
     }
 }

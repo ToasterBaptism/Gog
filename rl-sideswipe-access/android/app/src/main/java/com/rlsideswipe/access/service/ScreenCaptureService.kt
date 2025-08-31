@@ -447,6 +447,7 @@ class ScreenCaptureService : Service() {
     }
     
     private fun detectBallSimple(bitmap: Bitmap): FrameResult? {
+        var detectionCount = 0
         return try {
             // Shape-based ball detection using circular object detection
             val width = bitmap.width
@@ -492,12 +493,8 @@ class ScreenCaptureService : Service() {
             // 🎯 PRIMARY: Multi-template matching for specific ball detection
             val templateMatches = detectBallUsingMultiTemplate(bitmap, searchStartX, searchEndX, searchStartY, searchEndY)
             
-            // Update statistics
-            framesProcessed++
-            if (templateMatches.isNotEmpty()) {
-                ballsDetected += templateMatches.size
-                lastDetectionTime = System.currentTimeMillis()
-            }
+            // Track detections for statistics update in finally block
+            detectionCount = templateMatches.size
             
             Log.d(TAG, "🔍 DETECTION RESULTS: ${templateMatches.size} template matches found")
             
@@ -635,6 +632,13 @@ class ScreenCaptureService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "Simple ball detection failed", e)
             null
+        } finally {
+            // Update statistics in finally block to ensure per-frame accounting
+            framesProcessed++
+            if (detectionCount > 0) {
+                ballsDetected += detectionCount
+                lastDetectionTime = System.currentTimeMillis()
+            }
         }
     }
     

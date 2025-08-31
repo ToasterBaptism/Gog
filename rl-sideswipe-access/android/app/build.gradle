@@ -108,12 +108,13 @@ android {
         }
     }
 
-    // Configure APK naming with version
+    // Configure APK naming with version and flavor to prevent collisions
     applicationVariants.all { variant ->
         variant.outputs.all {
             def versionName = variant.versionName
             def buildType = variant.buildType.name
-            outputFileName = "RL-Sideswipe-Access-v${versionName}-${buildType}.apk"
+            def flavorName = variant.flavorName ?: "default"
+            outputFileName = "RL-Sideswipe-Access-v${versionName}-${flavorName}-${buildType}.apk"
         }
     }
 }
