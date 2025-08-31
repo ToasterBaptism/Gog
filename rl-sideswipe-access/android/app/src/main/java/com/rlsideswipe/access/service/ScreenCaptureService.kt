@@ -31,6 +31,7 @@ import com.rlsideswipe.access.R
 import com.rlsideswipe.access.ai.Detection
 import com.rlsideswipe.access.ai.FrameResult
 import com.rlsideswipe.access.ai.InferenceEngine
+import com.rlsideswipe.access.ai.InferenceEngineFactory
 import com.rlsideswipe.access.ai.StubInferenceEngine
 import com.rlsideswipe.access.ai.TrajectoryPredictor
 import com.rlsideswipe.access.ai.TrajectoryPoint
@@ -291,22 +292,8 @@ class ScreenCaptureService : Service() {
             try {
                 Log.d(TAG, "Initializing AI components...")
 
-                val useTfLite = try { com.rlsideswipe.access.BuildConfig.FLAVOR?.contains("tflite") == true } catch (e: Exception) { false }
-
-                inferenceEngine = if (useTfLite) {
-                    try {
-                        val cls = Class.forName("com.rlsideswipe.access.ai.TFLiteInferenceEngine")
-                        val ctor = cls.getConstructor(android.content.Context::class.java)
-                        val engine = ctor.newInstance(applicationContext) as InferenceEngine
-                        Log.i(TAG, "TFLiteInferenceEngine instantiated")
-                        engine
-                    } catch (e: Throwable) {
-                        Log.e(TAG, "Failed to instantiate TFLiteInferenceEngine, falling back to stub", e)
-                        StubInferenceEngine()
-                    }
-                } else {
-                    StubInferenceEngine()
-                }
+                // Always try TensorFlow Lite first, with intelligent fallback
+                inferenceEngine = InferenceEngineFactory.createEngine(applicationContext, preferTensorFlow = true)
                 
                 // Initialize trajectory predictor
                 trajectoryPredictor = try {
@@ -574,33 +561,20 @@ class ScreenCaptureService : Service() {
                 Log.d(TAG, "🔄 Bitmap: ${bitmapWidth.toInt()}x${bitmapHeight.toInt()} -> Screen: ${screenWidth}x${screenHeight}")
                 Log.d(TAG, "🔄 Scale factors: X=${"%.3f".format(scaleX)}, Y=${"%.3f".format(scaleY)}")
                 
-                val isTflite = try { com.rlsideswipe.access.BuildConfig.FLAVOR?.contains("tflite") == true } catch (e: Exception) { false }
-                val overlayPoints = if (isTflite) {
+                // Always show template matches for debugging (TensorFlow Lite build)
+                val overlayPoints = run {
                     templateMatches.map { match ->
                         val screenX = match.x * scaleX
                         val screenY = match.y * scaleY
                         Log.d(TAG, "🔄 Transformed: bitmap(${match.x.toInt()},${match.y.toInt()}) -> screen(${"%.1f".format(screenX)},${"%.1f".format(screenY)})")
                         PredictionOverlayService.PredictionPoint(screenX, screenY, 0f)
                     }
-                } else {
-                    val points = mutableListOf<PredictionOverlayService.PredictionPoint>()
-                    points.addAll(templateMatches.map { match ->
-                        val screenX = match.x * scaleX
-                        val screenY = match.y * scaleY
-                        Log.d(TAG, "🔄 Transformed: bitmap(${match.x.toInt()},${match.y.toInt()}) -> screen(${"%.1f".format(screenX)},${"%.1f".format(screenY)})")
-                        PredictionOverlayService.PredictionPoint(screenX, screenY, 0f)
-                    })
-                    // Add test points in screen coordinates
-                    points.add(PredictionOverlayService.PredictionPoint(screenWidth * 0.1f, screenHeight * 0.1f, 2f))
-                    points.add(PredictionOverlayService.PredictionPoint(screenWidth * 0.5f, screenHeight * 0.5f, 1f))
-                    points.add(PredictionOverlayService.PredictionPoint(screenWidth * 0.9f, screenHeight * 0.9f, 2f))
-                    points
                 }
                 
                 // Overlay updates flow via frameResults/trajectoryPoints observers
             } else {
-                val isTflite = try { com.rlsideswipe.access.BuildConfig.FLAVOR?.contains("tflite") == true } catch (e: Exception) { false }
-                if (!isTflite) {
+                // No template matches found - show debug overlay for TensorFlow Lite build
+                run {
                     Log.d(TAG, "❌ NO TEMPLATE MATCHES - showing test overlay points for debugging")
                     // Send test points to verify overlay works (time=1f for center, 2f for corners)
                     val testPoints = listOf(
@@ -1752,19 +1726,8 @@ class ScreenCaptureService : Service() {
                 // Screen info and overlay updates now flow via LiveData observers
                 Log.d(TAG, "📡 Overlay service started, updates will flow via LiveData: ${screenWidth}x${screenHeight}, landscape: $isLandscapeMode")
                 
-                val isTflite = try { com.rlsideswipe.access.BuildConfig.FLAVOR?.contains("tflite") == true } catch (e: Exception) { false }
-                if (!isTflite) {
-                    // Send initial test trajectory points via LiveData for non-tflite builds
-                    val testTrajectory = listOf(
-                        TrajectoryPoint(screenWidth * 0.1f, screenHeight * 0.1f, 0L),
-                        TrajectoryPoint(screenWidth * 0.5f, screenHeight * 0.5f, 1000L),
-                        TrajectoryPoint(screenWidth * 0.9f, screenHeight * 0.9f, 2000L)
-                    )
-                    Log.d(TAG, "🧪 STARTUP: Publishing initial test trajectory via LiveData")
-                    trajectoryPoints.postValue(testTrajectory)
-                } else {
-                    Log.d(TAG, "🧪 STARTUP: tflite build - skipping initial debug test points")
-                }
+                // TensorFlow Lite build - skip initial debug test points
+                Log.d(TAG, "🧪 STARTUP: TensorFlow Lite build - real ball detection will provide trajectory points")
             }, 500) // 500ms delay to ensure service is ready
             
             Log.d(TAG, "Prediction overlay service started with screen info: ${screenWidth}x${screenHeight}, landscape: $isLandscapeMode")

@@ -1,5 +1,6 @@
 package com.rlsideswipe.access.ai
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 
@@ -23,10 +24,42 @@ interface InferenceEngine {
     fun close()
 }
 
-// Default runtime uses the stubbed engine; real ML backends live in flavor-specific sources
+/**
+ * Factory for creating the appropriate inference engine
+ */
+object InferenceEngineFactory {
+    private const val TAG = "InferenceEngineFactory"
+    
+    fun createEngine(context: Context, preferTensorFlow: Boolean = true): InferenceEngine {
+        return if (preferTensorFlow) {
+            try {
+                Log.d(TAG, "🚀 Attempting to create TensorFlow Lite engine...")
+                TFLiteInferenceEngine(context)
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠️ TensorFlow Lite unavailable, falling back to stub: ${e.message}")
+                StubInferenceEngine()
+            }
+        } else {
+            Log.d(TAG, "📝 Creating stub engine as requested")
+            StubInferenceEngine()
+        }
+    }
+}
+
+// Fallback stub engine for when TensorFlow Lite is unavailable
 class StubInferenceEngine : InferenceEngine {
     companion object { private const val TAG = "StubInferenceEngine" }
-    override fun warmup() { Log.d(TAG, "stub warmup") }
-    override fun infer(frame: Bitmap): FrameResult = FrameResult(null, System.nanoTime())
-    override fun close() { Log.d(TAG, "stub close") }
+    
+    override fun warmup() { 
+        Log.d(TAG, "📝 Stub warmup - no ML model to warm up")
+    }
+    
+    override fun infer(frame: Bitmap): FrameResult {
+        Log.d(TAG, "📝 Stub inference - returning null (will trigger template matching fallback)")
+        return FrameResult(null, System.nanoTime())
+    }
+    
+    override fun close() { 
+        Log.d(TAG, "📝 Stub close - no resources to clean up")
+    }
 }

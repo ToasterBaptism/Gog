@@ -98,23 +98,12 @@ android {
         jvmTarget = '17'
     }
 
-    flavorDimensions "aiBackend"
-    productFlavors {
-        stub {
-            dimension "aiBackend"
-        }
-        tflite {
-            dimension "aiBackend"
-        }
-    }
-
-    // Configure APK naming with version and flavor to prevent collisions
+    // Configure APK naming with version and build type
     applicationVariants.all { variant ->
         variant.outputs.all {
             def versionName = variant.versionName
             def buildType = variant.buildType.name
-            def flavorName = variant.flavorName ?: "default"
-            outputFileName = "RL-Sideswipe-Access-v${versionName}-${flavorName}-${buildType}.apk"
+            outputFileName = "RL-Sideswipe-Access-v${versionName}-tflite-${buildType}.apk"
         }
     }
 }
@@ -128,12 +117,13 @@ dependencies {
     implementation "androidx.lifecycle:lifecycle-livedata-ktx:2.8.4"
     implementation "androidx.activity:activity-ktx:1.9.1"
     
-    // AI backends isolated via flavors. Default 'stub' flavor includes no ML deps.
-    stubImplementation "androidx.annotation:annotation:1.8.2"
-    // Optional TF Lite/MediaPipe deps only in the 'tflite' flavor.
-    tfliteImplementation "org.tensorflow:tensorflow-lite:2.13.0"
-    tfliteImplementation "org.tensorflow:tensorflow-lite-support:0.4.4"
-    tfliteImplementation "com.google.mediapipe:tasks-vision:0.10.14"
+    // TensorFlow Lite - Always included for comprehensive AI ball detection
+    implementation "org.tensorflow:tensorflow-lite:2.13.0"
+    implementation "org.tensorflow:tensorflow-lite-gpu:2.13.0"
+    implementation "org.tensorflow:tensorflow-lite-support:0.4.4"
+    
+    // MediaPipe for advanced computer vision (optional enhancement)
+    implementation "com.google.mediapipe:tasks-vision:0.10.14"
 
     // Audio
     implementation "androidx.media:media:1.7.0"
