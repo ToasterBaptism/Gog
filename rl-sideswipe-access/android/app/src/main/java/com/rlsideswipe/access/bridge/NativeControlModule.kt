@@ -16,16 +16,41 @@ import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.facebook.react.bridge.*
+import com.facebook.react.bridge.ActivityEventListener
 import com.rlsideswipe.access.service.ScreenCaptureService
 
-class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
+class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext), ActivityEventListener {
 
     companion object {
         private const val REQUEST_MEDIA_PROJECTION = 1001
         private const val REQUEST_PERMISSIONS = 1002
     }
 
+    // Store pending permission promise
+    private var pendingPermissionPromise: Promise? = null
+    private var pendingOverlayPermission = false
+
+    init {
+        // Register for activity lifecycle events
+        reactContext.addActivityEventListener(this)
+    }
+
     override fun getName(): String = "NativeControlModule"
+
+    override fun onActivityResult(activity: Activity?, requestCode: Int, resultCode: Int, data: Intent?) {
+        // Not used for permission handling, but required by interface
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        // Not used for permission handling, but required by interface
+    }
+
+    private fun clearPendingPromise(errorMessage: String = "Activity lifecycle interrupted") {
+        pendingOverlayPermission = false
+        val promise = pendingPermissionPromise
+        pendingPermissionPromise = null
+        promise?.reject("LIFECYCLE_ERROR", errorMessage)
+    }
 
     @ReactMethod
     fun isServiceEnabled(promise: Promise) {
@@ -156,6 +181,16 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
         try {
             val activity = currentActivity
             if (activity != null) {
+                // Check if there's already a pending permission request
+                if (pendingPermissionPromise != null) {
+                    promise.reject("ERROR", "Permission request already in progress")
+                    return
+                }
+                
+                // Store the promise to resolve later
+                pendingPermissionPromise = promise
+                pendingOverlayPermission = false
+                
                 val requiredPermissions = mutableListOf<String>()
                 
                 // Check all runtime permissions
@@ -180,33 +215,127 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
                     }
                 }
                 
-                // Request runtime permissions if any are missing
+                // Check if overlay permission is needed
+                val needsOverlayPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && 
+                    !Settings.canDrawOverlays(reactApplicationContext)
+                
+                // If all permissions are already granted, resolve immediately
+                if (requiredPermissions.isEmpty() && !needsOverlayPermission) {
+                    Log.d("NativeControl", "All permissions already granted")
+                    pendingPermissionPromise?.resolve(null)
+                    pendingPermissionPromise = null
+                    return
+                }
+                
+                // Request runtime permissions first if any are missing
                 if (requiredPermissions.isNotEmpty()) {
                     Log.d("NativeControl", "Requesting ${requiredPermissions.size} runtime permissions")
                     ActivityCompat.requestPermissions(activity, requiredPermissions.toTypedArray(), REQUEST_PERMISSIONS)
-                } else {
-                    Log.d("NativeControl", "All runtime permissions already granted")
+                } else if (needsOverlayPermission) {
+                    // If no runtime permissions needed, go directly to overlay permission
+                    requestOverlayPermission()
                 }
                 
-                // Handle system alert window permission separately
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(reactApplicationContext)) {
-                    Log.d("NativeControl", "Requesting overlay permission")
-                    val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
-                        data = android.net.Uri.parse("package:${reactApplicationContext.packageName}")
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    reactApplicationContext.startActivity(intent)
-                } else {
-                    Log.d("NativeControl", "Overlay permission already granted")
-                }
-                
-                promise.resolve(null)
             } else {
                 promise.reject("ERROR", "No current activity")
             }
         } catch (e: Exception) {
             Log.e("NativeControl", "Failed to request permissions", e)
             promise.reject("ERROR", "Failed to request permissions", e)
+        }
+    }
+    
+    private fun requestOverlayPermission() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(reactApplicationContext)) {
+                Log.d("NativeControl", "Requesting overlay permission")
+                pendingOverlayPermission = true
+                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                    data = android.net.Uri.parse("package:${reactApplicationContext.packageName}")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                reactApplicationContext.startActivity(intent)
+                
+                // Start checking for overlay permission in background
+                checkOverlayPermissionPeriodically()
+            } else {
+                Log.d("NativeControl", "Overlay permission already granted or not needed")
+                finishPermissionRequest(true)
+            }
+        } catch (e: Exception) {
+            Log.e("NativeControl", "Failed to request overlay permission", e)
+            finishPermissionRequest(false, "Failed to request overlay permission: ${e.message}")
+        }
+    }
+    
+    private fun checkOverlayPermissionPeriodically() {
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        val checkRunnable = object : Runnable {
+            override fun run() {
+                if (pendingOverlayPermission && pendingPermissionPromise != null) {
+                    if (Settings.canDrawOverlays(reactApplicationContext)) {
+                        Log.d("NativeControl", "Overlay permission granted")
+                        finishPermissionRequest(true)
+                    } else {
+                        // Check again in 1 second
+                        handler.postDelayed(this, 1000)
+                    }
+                }
+            }
+        }
+        handler.postDelayed(checkRunnable, 1000)
+        
+        // Set a timeout to avoid infinite waiting
+        handler.postDelayed({
+            if (pendingOverlayPermission && pendingPermissionPromise != null) {
+                Log.w("NativeControl", "Overlay permission request timed out")
+                finishPermissionRequest(false, "Overlay permission request timed out")
+            }
+        }, 30000) // 30 second timeout
+    }
+    
+    private fun finishPermissionRequest(success: Boolean, errorMessage: String? = null) {
+        pendingOverlayPermission = false
+        val promise = pendingPermissionPromise
+        pendingPermissionPromise = null
+        
+        if (success) {
+            promise?.resolve(null)
+        } else {
+            promise?.reject("PERMISSION_DENIED", errorMessage ?: "Permission request failed")
+        }
+    }
+    
+    // Method to be called from MainActivity when permission results are received
+    fun onPermissionResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        if (requestCode == REQUEST_PERMISSIONS && pendingPermissionPromise != null) {
+            Log.d("NativeControl", "Received permission results for ${permissions.size} permissions")
+            
+            // Check if all requested permissions were granted
+            var allGranted = true
+            for (i in grantResults.indices) {
+                if (grantResults[i] != PackageManager.PERMISSION_GRANTED) {
+                    Log.w("NativeControl", "Permission denied: ${permissions[i]}")
+                    allGranted = false
+                }
+            }
+            
+            if (!allGranted) {
+                finishPermissionRequest(false, "One or more runtime permissions were denied")
+                return
+            }
+            
+            Log.d("NativeControl", "All runtime permissions granted")
+            
+            // Check if overlay permission is still needed
+            val needsOverlayPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && 
+                !Settings.canDrawOverlays(reactApplicationContext)
+                
+            if (needsOverlayPermission) {
+                requestOverlayPermission()
+            } else {
+                finishPermissionRequest(true)
+            }
         }
     }
 

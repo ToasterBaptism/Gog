@@ -49,12 +49,57 @@
 - **Gradle Version:** 8.7
 - **Java Version:** OpenJDK 17
 
-## 🛡️ Security Information
+## 🛡️ Security Verification
 
-- Built from official source code: [ToasterBaptism/Gog](https://github.com/ToasterBaptism/Gog)
-- All PR review comments addressed and resolved
-- No malicious code or unauthorized network access
-- Permissions required only for legitimate app functionality
+### 📋 Build Verification
+- **Source Repository**: [ToasterBaptism/Gog](https://github.com/ToasterBaptism/Gog)
+- **Latest Commit**: `91b8a23` (main branch)
+- **Release Tag**: v2.25 (versionCode 18)
+
+### 🔍 Integrity Verification
+```bash
+# Verify APK SHA-256 checksum
+sha256sum RL-Sideswipe-Access-v*.apk
+
+# Verify model file integrity
+sha256sum rl-sideswipe-access/android/app/src/tflite/assets/rl_sideswipe_ball_v1.tflite
+
+# Expected checksums: [To be updated with actual values]
+```
+
+### 🏗️ Build Reproduction
+```bash
+# Clone and build from source
+git clone https://github.com/ToasterBaptism/Gog.git
+cd Gog/rl-sideswipe-access
+git checkout 91b8a23
+
+# Install dependencies and build
+npm install
+cd android && ./gradlew assembleStubRelease
+
+# Verify build output matches distributed APK
+sha256sum app/build/outputs/apk/stub/release/*.apk
+```
+
+### 🔍 Dependency Audit
+```bash
+# Audit npm dependencies for vulnerabilities
+npm audit
+
+# Check for high-severity issues
+npm audit --audit-level high
+
+# Review Android dependencies
+cd android && ./gradlew dependencies > dependencies.txt
+
+# Expected: No critical vulnerabilities in production dependencies
+```
+
+### 🔐 Code Review Verification
+- **PR #1**: [Merged](https://github.com/ToasterBaptism/Gog/pull/1) - All reviewer feedback addressed
+- **Review Status**: Check latest commit comments for verification
+- **Security Scan**: Run static analysis tools on source code before deployment
 
 ## 📋 Permissions Required
 

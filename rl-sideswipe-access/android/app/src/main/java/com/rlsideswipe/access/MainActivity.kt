@@ -14,6 +14,7 @@ import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
 import com.rlsideswipe.access.service.ScreenCaptureService
+import com.rlsideswipe.access.bridge.NativeControlModule
 
 class MainActivity : ReactActivity() {
 
@@ -105,6 +106,24 @@ class MainActivity : ReactActivity() {
             Log.e("MainActivity", "Exception in requestMediaProjection: ${e.message}", e)
             pendingMediaProjectionResult = null
             callback(null)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        
+        // Forward permission results to NativeControlModule
+        try {
+            val reactInstanceManager = reactNativeHost.reactInstanceManager
+            val reactContext = reactInstanceManager.currentReactContext
+            if (reactContext != null) {
+                val nativeModule = reactContext.getNativeModule(NativeControlModule::class.java)
+                nativeModule?.onPermissionResult(requestCode, permissions, grantResults)
+            } else {
+                Log.w("MainActivity", "React context not available for permission result")
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Failed to forward permission result to NativeControlModule", e)
         }
     }
 }
