@@ -108,13 +108,7 @@ class PredictionOverlayService : Service() {
     
     private fun createOverlay() {
         try {
-            // Check if we have overlay permission
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                if (!android.provider.Settings.canDrawOverlays(this)) {
-                    Log.e(TAG, "🚨 OVERLAY PERMISSION DENIED - Cannot create overlay!")
-                    return
-                }
-            }
+            // TYPE_ACCESSIBILITY_OVERLAY does not require SYSTEM_ALERT_WINDOW; no overlay settings check needed here
             
             windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
             overlayView = PredictionOverlayView(this)
@@ -295,8 +289,12 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
         
         // Since coordinates are now already in screen space, we just need to scale to view size
         // Most of the time, view size should match screen size for full-screen overlay
-        val scaleX = viewWidth / screenWidth.toFloat()
-        val scaleY = viewHeight / screenHeight.toFloat()
+        if (screenWidth <= 0 || screenHeight <= 0) {
+            Log.w(TAG, "  ⚠️ Missing screen info, returning original coords")
+            return Pair(x, y)
+        }
+        val scaleX = viewWidth  / screenWidth.toFloat().coerceAtLeast(1f)
+        val scaleY = viewHeight / screenHeight.toFloat().coerceAtLeast(1f)
         
         val transformedX = x * scaleX
         val transformedY = y * scaleY
@@ -332,19 +330,17 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
         
         try {
             // Draw current ball position indicator - either from detection or manual override
-            val (ballX, ballY) = if (isManualMode && manualBallPosition != null) {
-                // Use manual position directly (already in overlay coordinates)
-                manualBallPosition!!
-            } else if (predictions.isNotEmpty()) {
-                // Use detected position (transform from screen coordinates)
-                val currentPos = predictions[0]
-                transformCoordinates(currentPos.x, currentPos.y)
-            } else {
-                // No ball position available
-                null to null
-            }
-            
-            if (ballX != null && ballY != null) {
+            val ballPos: Pair<Float, Float>? =
+                if (isManualMode && manualBallPosition != null) {
+                    manualBallPosition
+                } else if (predictions.isNotEmpty()) {
+                    val currentPos = predictions[0]
+                    transformCoordinates(currentPos.x, currentPos.y)
+                } else {
+                    null
+                }
+
+            ballPos?.let { (ballX, ballY) ->
                 Log.d(TAG, "🎨 Drawing ball at ($ballX, $ballY) manual=$isManualMode")
                 
                 // Draw VERY VISIBLE ball indicator - different colors for manual vs detected
