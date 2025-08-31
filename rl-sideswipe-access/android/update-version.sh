@@ -14,6 +14,9 @@ fi
 VERSION_NAME="$1"
 DESCRIPTION="${2:-Updated version}"
 
+# Ensure we're in the script's directory
+cd "$(dirname "$0")"
+
 # Extract version number for versionCode (increment from current)
 CURRENT_VERSION_CODE=$(grep "versionCode" app/build.gradle | sed 's/.*versionCode \([0-9]*\).*/\1/')
 NEW_VERSION_CODE=$((CURRENT_VERSION_CODE + 1))
@@ -35,9 +38,19 @@ echo "🔨 Building APK..."
 ./gradlew assembleRelease
 
 if [ $? -eq 0 ]; then
+    # Ensure target directory exists
+    mkdir -p "/tmp/webserver"
+    
+    # Verify APK exists before copying
+    APK_PATH="app/build/outputs/apk/release/app-release.apk"
+    if [ ! -f "$APK_PATH" ]; then
+        echo "❌ Error: APK not found at $APK_PATH"
+        exit 1
+    fi
+    
     # Copy to webserver with versioned name
     APK_NAME="app-release-v$VERSION_NAME.apk"
-    cp app/build/outputs/apk/release/app-release.apk "/tmp/webserver/$APK_NAME"
+    cp "$APK_PATH" "/tmp/webserver/$APK_NAME"
     echo "✅ Built and copied: $APK_NAME"
     
     # Show file size

@@ -651,7 +651,7 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
     
     private fun captureCurrentTemplate() {
         val finalPos = manualBallPosition
-        if (finalPos != null) {
+        if (finalPos != null && width > 0 && height > 0) {
             // Convert overlay coordinates back to screen coordinates for template capture
             val screenX = finalPos.first * screenWidth / width
             val screenY = finalPos.second * screenHeight / height

@@ -390,6 +390,13 @@ class ScreenCaptureService : Service() {
                 Log.d(TAG, "🤖 Using inference engine: ${inferenceEngine?.javaClass?.simpleName}")
                 val ballDetection = inferenceEngine?.infer(bitmap)
                 
+                // Update statistics
+                framesProcessed++
+                if (ballDetection?.ball != null) {
+                    ballsDetected++
+                    lastDetectionTime = System.currentTimeMillis()
+                }
+                
                 if (ballDetection != null) {
                     // Post results on main thread
                     mainHandler.post {
@@ -428,7 +435,7 @@ class ScreenCaptureService : Service() {
                     val buffer = planes[0].buffer
                     val pixelStride = planes[0].pixelStride
                     val rowStride = planes[0].rowStride
-                    val rowPadding = rowStride - pixelStride * image.width
+                    val rowPadding = (rowStride - pixelStride * image.width).coerceAtLeast(0)
                     
                     val bitmap = Bitmap.createBitmap(
                         image.width + rowPadding / pixelStride,
@@ -731,6 +738,12 @@ class ScreenCaptureService : Service() {
                     val top = (y - halfSize).toInt().coerceAtLeast(0)
                     val right = (x + halfSize).toInt().coerceAtMost(currentBitmap.width)
                     val bottom = (y + halfSize).toInt().coerceAtMost(currentBitmap.height)
+                    
+                    // Ensure valid bounds before creating bitmap
+                    if (right <= left || bottom <= top) {
+                        Log.w(TAG, "Invalid bounds for template capture: left=$left, top=$top, right=$right, bottom=$bottom")
+                        return@post
+                    }
                     
                     // Extract the region
                     val extractedRegion = Bitmap.createBitmap(

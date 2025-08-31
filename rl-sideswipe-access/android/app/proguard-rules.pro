@@ -40,8 +40,8 @@
 -keep class com.google.mediapipe.proto.** { *; }
 -dontwarn com.google.mediapipe.proto.**
 
-# OpenCV
--keep class org.opencv.** { *; }
+# OpenCV (removed)
+# -keep class org.opencv.** { *; }
 -keep class com.rlsideswipe.access.bridge.** { *; }
 
 

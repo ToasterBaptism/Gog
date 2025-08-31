@@ -82,7 +82,11 @@ class BallTemplateManager(private val context: Context) {
                             // Ensure template is 80x80 for better detection of larger balls
                             val resizedBitmap = if (bitmap.width != 80 || bitmap.height != 80) {
                                 Log.w(TAG, "⚠️ Resizing template $filename from ${bitmap.width}x${bitmap.height} to 80x80")
-                                Bitmap.createScaledBitmap(bitmap, 80, 80, true)
+                                val scaled = Bitmap.createScaledBitmap(bitmap, 80, 80, true)
+                                if (scaled != bitmap) {
+                                    bitmap.recycle() // Recycle original if a new bitmap was created
+                                }
+                                scaled
                             } else {
                                 bitmap
                             }
@@ -735,8 +739,8 @@ class BallTemplateManager(private val context: Context) {
      */
     fun addLearnedTemplate(bitmap: Bitmap) {
         try {
-            // Create a copy to avoid external modifications
-            val templateCopy = bitmap.copy(bitmap.config, false)
+            // Create a copy to avoid external modifications (force ARGB_8888 to avoid unsupported configs)
+            val templateCopy = bitmap.copy(Bitmap.Config.ARGB_8888, false)
             
             // Generate unique name for learned template
             val learnedCount = ballTemplates.count { it.name.startsWith("learned_") }
