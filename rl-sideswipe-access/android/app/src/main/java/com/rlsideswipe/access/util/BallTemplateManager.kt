@@ -16,7 +16,7 @@ class BallTemplateManager(private val context: Context) {
     companion object {
         private const val TAG = "BallTemplateManager"
         private const val TEMPLATE_FOLDER = "ball_templates"
-        private const val SIMILARITY_THRESHOLD = 0.45f // Much lower threshold for dark balls
+        private const val SIMILARITY_THRESHOLD = 0.35f // Even lower threshold for better detection
         private const val FALSE_POSITIVE_THRESHOLD = 0.99f // Perfect matches are suspicious
         private const val MAX_HORIZONTAL_MATCHES = 10 // Max matches in same Y band
         private const val REGULAR_SPACING_THRESHOLD = 6 // UI elements have regular spacing
@@ -79,10 +79,10 @@ class BallTemplateManager(private val context: Context) {
                         inputStream.close()
                         
                         if (bitmap != null) {
-                            // Ensure template is 60x60 as expected
-                            val resizedBitmap = if (bitmap.width != 60 || bitmap.height != 60) {
-                                Log.w(TAG, "⚠️ Resizing template $filename from ${bitmap.width}x${bitmap.height} to 60x60")
-                                Bitmap.createScaledBitmap(bitmap, 60, 60, true)
+                            // Ensure template is 80x80 for better detection of larger balls
+                            val resizedBitmap = if (bitmap.width != 80 || bitmap.height != 80) {
+                                Log.w(TAG, "⚠️ Resizing template $filename from ${bitmap.width}x${bitmap.height} to 80x80")
+                                Bitmap.createScaledBitmap(bitmap, 80, 80, true)
                             } else {
                                 bitmap
                             }
@@ -146,6 +146,13 @@ class BallTemplateManager(private val context: Context) {
             ballTemplates.add(BallTemplate("synthetic_very_dark", darkTemplate, 
                 TemplateMetadata("dark", "unknown", "synthetic", 0.8f)))
         }
+        
+        // Create large gray template matching user's screenshot
+        val largeGrayTemplate = createLargeGraySyntheticBall()
+        if (largeGrayTemplate != null) {
+            ballTemplates.add(BallTemplate("synthetic_large_gray", largeGrayTemplate, 
+                TemplateMetadata("normal", "unknown", "synthetic", 0.9f)))
+        }
     }
     
     /**
@@ -153,7 +160,7 @@ class BallTemplateManager(private val context: Context) {
      * Features: metallic gray base, hexagonal grid pattern, white circular elements
      */
     private fun createEnhancedSyntheticBall(): Bitmap {
-        val size = 60
+        val size = 80
         val template = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val centerX = size / 2f
         val centerY = size / 2f
@@ -221,7 +228,7 @@ class BallTemplateManager(private val context: Context) {
      * Based on user's screenshot showing much darker ball
      */
     private fun createVeryDarkSyntheticBall(): Bitmap {
-        val size = 60
+        val size = 80
         val template = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val centerX = size / 2f
         val centerY = size / 2f
@@ -283,6 +290,84 @@ class BallTemplateManager(private val context: Context) {
     }
     
     /**
+     * Create large gray synthetic ball template matching user's screenshot
+     * Features: larger size, prominent hexagonal pattern, gray metallic appearance
+     */
+    private fun createLargeGraySyntheticBall(): Bitmap {
+        val size = 80
+        val template = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val centerX = size / 2f
+        val centerY = size / 2f
+        val radius = size / 2.1f
+        
+        for (y in 0 until size) {
+            for (x in 0 until size) {
+                val dx = x - centerX
+                val dy = y - centerY
+                val distance = sqrt(dx * dx + dy * dy)
+                
+                if (distance <= radius) {
+                    val normalizedX = (x - centerX) / radius
+                    val normalizedY = (y - centerY) / radius
+                    
+                    // Medium gray base color (like in user's screenshot)
+                    var baseIntensity = 120 // Medium gray
+                    
+                    // Prominent hexagonal grid pattern (larger scale for 80x80)
+                    val gridSize = 12f // Larger grid for bigger template
+                    val gridX = (normalizedX * gridSize).toInt()
+                    val gridY = (normalizedY * gridSize).toInt()
+                    
+                    // Create more prominent hexagonal grid lines
+                    val isGridLine = (gridX + gridY) % 2 == 0 || 
+                                   abs(normalizedX * gridSize - gridX.toFloat()) < 0.2f ||
+                                   abs(normalizedY * gridSize - gridY.toFloat()) < 0.2f
+                    
+                    if (isGridLine) {
+                        baseIntensity -= 25 // More prominent darker grid lines
+                    }
+                    
+                    // Add hexagonal cell centers (brighter spots)
+                    val cellCenterX = (normalizedX * gridSize + 0.5f).toInt() - 0.5f
+                    val cellCenterY = (normalizedY * gridSize + 0.5f).toInt() - 0.5f
+                    val cellDistance = sqrt((normalizedX * gridSize - cellCenterX) * (normalizedX * gridSize - cellCenterX) + 
+                                          (normalizedY * gridSize - cellCenterY) * (normalizedY * gridSize - cellCenterY))
+                    
+                    if (cellDistance < 0.3f) {
+                        baseIntensity += 15 // Brighter cell centers
+                    }
+                    
+                    // Prominent white/bright spots (like in user's screenshot)
+                    val spotDistance1 = sqrt((normalizedX - 0.25f) * (normalizedX - 0.25f) + (normalizedY - 0.15f) * (normalizedY - 0.15f))
+                    val spotDistance2 = sqrt((normalizedX + 0.3f) * (normalizedX + 0.3f) + (normalizedY + 0.2f) * (normalizedY + 0.2f))
+                    val spotDistance3 = sqrt((normalizedX - 0.1f) * (normalizedX - 0.1f) + (normalizedY + 0.35f) * (normalizedY + 0.35f))
+                    
+                    if (spotDistance1 < 0.12f || spotDistance2 < 0.1f || spotDistance3 < 0.08f) {
+                        baseIntensity += 40 // Bright reflective spots
+                    }
+                    
+                    // 3D shading effect
+                    val lightAngle = atan2(normalizedY, normalizedX)
+                    val lightFactor = cos(lightAngle - PI/4) * 0.25f + 0.75f
+                    val shadedIntensity = (baseIntensity * lightFactor).toInt()
+                    
+                    // Gray metallic color with slight blue tint
+                    val red = (shadedIntensity * 0.90f).toInt().coerceIn(0, 255)
+                    val green = (shadedIntensity * 0.93f).toInt().coerceIn(0, 255)
+                    val blue = (shadedIntensity * 1.02f).toInt().coerceIn(0, 255)
+                    
+                    val color = (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
+                    template.setPixel(x, y, color)
+                } else {
+                    template.setPixel(x, y, 0x00000000) // Transparent
+                }
+            }
+        }
+        
+        return template
+    }
+    
+    /**
      * Detect balls using ensemble template matching with false positive filtering
      */
     fun detectBalls(bitmap: Bitmap, startX: Int, endX: Int, startY: Int, endY: Int): List<TemplateMatch> {
@@ -328,8 +413,8 @@ class BallTemplateManager(private val context: Context) {
         val matches = mutableListOf<TemplateMatch>()
         val templateBitmap = template.bitmap
         
-        // Multi-scale matching
-        val scales = listOf(0.8f, 1.0f, 1.2f, 1.4f)
+        // Multi-scale matching with wider range for different ball sizes
+        val scales = listOf(0.6f, 0.8f, 1.0f, 1.2f, 1.4f, 1.6f)
         
         for (scale in scales) {
             val scaledWidth = (templateBitmap.width * scale).toInt()
@@ -539,17 +624,19 @@ class BallTemplateManager(private val context: Context) {
                         val bGreen = (bitmapPixel shr 8) and 0xFF
                         val bBlue = bitmapPixel and 0xFF
                         
-                        // Enhanced boost for RL ball characteristics including dark balls
+                        // Enhanced boost for RL ball characteristics including all ball types
                         val colorBonus = if (isMetallicGrayColor(bRed, bGreen, bBlue)) {
                             val avgBrightness = (bRed + bGreen + bBlue) / 3
                             // Extra boost for white spots (reflective elements)
                             if (bRed > 180 && bGreen > 180 && bBlue > 180) 0.35f
-                            // Strong boost for very dark balls (like in user's screenshot)
+                            // Strong boost for very dark balls
                             else if (avgBrightness in 25..80) 0.40f
-                            // Boost for metallic gray base
-                            else if (avgBrightness in 100..160) 0.25f
+                            // Strong boost for medium gray balls (like in user's new screenshot)
+                            else if (avgBrightness in 100..160) 0.45f
+                            // Boost for other metallic gray variations
+                            else if (avgBrightness in 80..200) 0.30f
                             // Standard boost for other ball colors
-                            else 0.20f
+                            else 0.25f
                         } else 0f
                         
                         val colorDiff = sqrt(
@@ -592,8 +679,8 @@ class BallTemplateManager(private val context: Context) {
     private fun isMetallicGrayColor(red: Int, green: Int, blue: Int): Boolean {
         val avgColor = (red + green + blue) / 3
         
-        // Expanded range to include very dark balls (like in user's screenshot)
-        val isInBallRange = avgColor in 25..185 // Much wider range including dark balls
+        // Expanded range to include very dark balls and medium gray balls
+        val isInBallRange = avgColor in 25..200 // Even wider range including bright gray balls
         
         // Color balance check: RL ball has slight blue-gray tint
         val colorVariance = maxOf(abs(red - green), abs(green - blue), abs(red - blue))
@@ -618,8 +705,12 @@ class BallTemplateManager(private val context: Context) {
         val isVeryDarkBall = avgColor in 25..80 && colorVariance < 35 &&
                             red in 20..90 && green in 20..90 && blue in 20..100
         
+        // Medium gray ball detection (like in user's new screenshot)
+        val isMediumGrayBall = avgColor in 100..160 && colorVariance < 40 &&
+                              red in 80..180 && green in 80..180 && blue in 80..190
+        
         return (isInBallRange && isGrayish) || 
-               isWhiteSpot || isDarkGrid || isMetallicHighlight || isVeryDarkBall
+               isWhiteSpot || isDarkGrid || isMetallicHighlight || isVeryDarkBall || isMediumGrayBall
     }
     
     /**
