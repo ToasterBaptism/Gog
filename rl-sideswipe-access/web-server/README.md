@@ -53,7 +53,7 @@
 
 ### 📋 Build Verification
 - **Source Repository**: [ToasterBaptism/Gog](https://github.com/ToasterBaptism/Gog)
-- **Latest Commit**: `91b8a23` (main branch)
+- **Latest Commit**: `517213b` (main branch)
 - **Release Tag**: v2.25 (versionCode 18)
 
 ### 🔍 Integrity Verification
