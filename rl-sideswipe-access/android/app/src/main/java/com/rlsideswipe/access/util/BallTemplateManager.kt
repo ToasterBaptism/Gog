@@ -58,7 +58,14 @@ class BallTemplateManager(private val context: Context) {
         // Create synthetic template as fallback
         createSyntheticTemplate()
         
-        Log.d(TAG, "✅ Template system initialized: ${ballTemplates.size} real templates + 1 synthetic")
+        Log.d(TAG, "✅ Template system initialized: ${ballTemplates.size} templates total")
+        ballTemplates.forEachIndexed { index, template ->
+            Log.d(TAG, "📋 Template #${index + 1}: ${template.name} (${template.bitmap.width}x${template.bitmap.height})")
+        }
+        
+        if (ballTemplates.isEmpty()) {
+            Log.e(TAG, "🚨 CRITICAL: No templates loaded! Ball detection will fail!")
+        }
     }
     
     /**
@@ -95,9 +102,9 @@ class BallTemplateManager(private val context: Context) {
                             val metadata = parseTemplateMetadata(filename)
                             
                             ballTemplates.add(BallTemplate(filename, resizedBitmap, metadata))
-                            Log.d(TAG, "✅ Loaded template: $filename (${metadata.lightingCondition})")
+                            Log.d(TAG, "✅ Loaded template: $filename (${metadata.lightingCondition}) - ${resizedBitmap.width}x${resizedBitmap.height}")
                         } else {
-                            Log.e(TAG, "❌ Failed to decode template: $filename")
+                            Log.e(TAG, "❌ Failed to decode template: $filename - bitmap is null")
                         }
                     } catch (e: IOException) {
                         Log.e(TAG, "❌ Error loading template $filename", e)
@@ -383,8 +390,11 @@ class BallTemplateManager(private val context: Context) {
         val allMatches = mutableListOf<TemplateMatch>()
         
         // Try each template
+        Log.d(TAG, "🔍 Starting template matching with ${ballTemplates.size} templates")
+        Log.d(TAG, "🔍 Search area: X($startX-$endX), Y($startY-$endY)")
+        
         for (template in ballTemplates) {
-            Log.d(TAG, "🔍 Testing template: ${template.name}")
+            Log.d(TAG, "🔍 Testing template: ${template.name} (${template.bitmap.width}x${template.bitmap.height})")
             val matches = detectWithSingleTemplate(bitmap, template, startX, endX, startY, endY)
             Log.d(TAG, "🎯 Template ${template.name}: ${matches.size} matches")
             matches.forEach { match ->
@@ -733,6 +743,14 @@ class BallTemplateManager(private val context: Context) {
      * Get template names for debugging
      */
     fun getTemplateNames(): List<String> = ballTemplates.map { it.name }
+    
+    fun isInitialized(): Boolean {
+        return ballTemplates.isNotEmpty()
+    }
+    
+    fun debugTemplateStatus(): String {
+        return "Templates: ${ballTemplates.size} loaded - ${ballTemplates.map { "${it.name}(${it.bitmap.width}x${it.bitmap.height})" }.joinToString(", ")}"
+    }
     
     /**
      * Add a learned template from manual ball positioning

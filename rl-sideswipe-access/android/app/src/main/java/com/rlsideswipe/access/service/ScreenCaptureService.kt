@@ -403,22 +403,35 @@ class ScreenCaptureService : Service() {
                 
                 // Use inference engine for ball detection, fallback to template matching if needed
                 Log.d(TAG, "🤖 Using inference engine: ${inferenceEngine?.javaClass?.simpleName}")
-                var ballDetection = inferenceEngine?.infer(bitmap)
+                var ballDetection: FrameResult? = null
                 
-                Log.d(TAG, "🔍 Inference result: ballDetection=$ballDetection, ball=${ballDetection?.ball}")
+                try {
+                    ballDetection = inferenceEngine?.infer(bitmap)
+                    Log.d(TAG, "🔍 Inference result: ballDetection=$ballDetection, ball=${ballDetection?.ball}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "🚨 Inference engine failed: ${e.message}", e)
+                }
                 
                 // If inference engine returns null or ball is null (like StubInferenceEngine), use template matching fallback
                 if (ballDetection?.ball == null) {
                     Log.d(TAG, "🔄 Inference engine returned null ball, using template matching fallback")
-                    ballDetection = detectBallSimple(bitmap)
-                    Log.d(TAG, "🎯 Template matching result: ballDetection=$ballDetection, ball=${ballDetection?.ball}")
+                    try {
+                        ballDetection = detectBallSimple(bitmap)
+                        Log.d(TAG, "🎯 Template matching result: ballDetection=$ballDetection, ball=${ballDetection?.ball}")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "🚨 Template matching failed: ${e.message}", e)
+                    }
                 }
                 
                 // If still no detection, try more aggressive detection methods
                 if (ballDetection?.ball == null) {
                     Log.d(TAG, "🚨 No ball detected by template matching, trying aggressive detection")
-                    ballDetection = detectBallAggressive(bitmap)
-                    Log.d(TAG, "💪 Aggressive detection result: ballDetection=$ballDetection, ball=${ballDetection?.ball}")
+                    try {
+                        ballDetection = detectBallAggressive(bitmap)
+                        Log.d(TAG, "💪 Aggressive detection result: ballDetection=$ballDetection, ball=${ballDetection?.ball}")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "🚨 Aggressive detection failed: ${e.message}", e)
+                    }
                 }
                 
                 // Update statistics
@@ -1015,6 +1028,11 @@ class ScreenCaptureService : Service() {
                         // Enable manual positioning mode in overlay service
                         com.rlsideswipe.access.service.PredictionOverlayService.enableManualPositioning()
                     }
+                    "com.rlsideswipe.access.DISABLE_MANUAL_POSITIONING" -> {
+                        Log.d(TAG, "🚪 Disabling manual ball positioning mode")
+                        // Disable manual positioning mode in overlay service
+                        com.rlsideswipe.access.service.PredictionOverlayService.disableManualPositioning()
+                    }
                 }
             }
         }
@@ -1022,6 +1040,7 @@ class ScreenCaptureService : Service() {
         val filter = IntentFilter().apply {
             addAction("com.rlsideswipe.access.CAPTURE_TEMPLATE")
             addAction("com.rlsideswipe.access.ENABLE_MANUAL_POSITIONING")
+            addAction("com.rlsideswipe.access.DISABLE_MANUAL_POSITIONING")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(templateCaptureReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -1160,6 +1179,7 @@ class ScreenCaptureService : Service() {
             }
             
             Log.d(TAG, "🎯 Multi-template detection with ${templateManager.getTemplateCount()} templates")
+            Log.d(TAG, "🎯 Template manager status: ${templateManager.debugTemplateStatus()}")
             
             // Use the new multi-template system with false positive filtering
             val templateMatches = templateManager.detectBalls(bitmap, startX, endX, startY, endY)

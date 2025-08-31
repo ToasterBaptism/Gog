@@ -937,6 +937,22 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
             promise.reject("ERROR", "Failed to enable manual positioning: ${e.message}", e)
         }
     }
+
+    @ReactMethod
+    fun disableManualBallPositioning(promise: Promise) {
+        try {
+            Log.d("NativeControl", "🚪 Disabling manual ball positioning mode")
+            
+            // Send broadcast to disable manual positioning mode
+            val intent = Intent("com.rlsideswipe.access.DISABLE_MANUAL_POSITIONING")
+            reactApplicationContext.sendBroadcast(intent)
+            
+            promise.resolve(true)
+        } catch (e: Exception) {
+            Log.e("NativeControl", "Failed to disable manual positioning", e)
+            promise.reject("ERROR", "Failed to disable manual positioning: ${e.message}", e)
+        }
+    }
     
     @ReactMethod
     fun getTemplateCount(promise: Promise) {

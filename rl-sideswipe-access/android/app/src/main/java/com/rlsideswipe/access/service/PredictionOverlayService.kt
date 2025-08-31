@@ -68,6 +68,11 @@ class PredictionOverlayService : Service() {
             Log.d(TAG, "🎯 Enabling manual ball positioning mode")
             instance?.overlayView?.enableTouchMode()
         }
+        
+        fun disableManualPositioning() {
+            Log.d(TAG, "🚪 Disabling manual ball positioning mode")
+            instance?.overlayView?.disableManualMode()
+        }
     }
     
     private var windowManager: WindowManager? = null
@@ -327,14 +332,17 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
         
         Log.d(TAG, "🎨 OVERLAY VIEW: onDraw() called with ${predictions.size} predictions")
         
-        // ALWAYS draw a test rectangle to verify overlay is working
-        val testPaint = Paint().apply {
-            color = Color.MAGENTA
-            style = Paint.Style.STROKE
-            strokeWidth = 8f
+        // Only draw test rectangle in debug mode when no ball is detected
+        if (predictions.isEmpty() && manualBallPosition == null && isManualMode) {
+            val testPaint = Paint().apply {
+                color = Color.MAGENTA
+                style = Paint.Style.STROKE
+                strokeWidth = 4f
+                alpha = 128 // Semi-transparent
+            }
+            canvas.drawRect(50f, 50f, 150f, 150f, testPaint)
+            Log.d(TAG, "🎨 OVERLAY VIEW: Drew debug test rectangle (manual mode, no ball)")
         }
-        canvas.drawRect(50f, 50f, 200f, 200f, testPaint)
-        Log.d(TAG, "🎨 OVERLAY VIEW: Drew test rectangle at (50,50)-(200,200)")
         
         // Draw screen info for debugging
         val textPaint = Paint().apply {

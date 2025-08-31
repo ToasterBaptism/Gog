@@ -94,9 +94,19 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
     }
 
     private fun loadModelFile(): MappedByteBuffer {
-        val afd = context.assets.openFd(MODEL_FILE)
-        FileInputStream(afd.fileDescriptor).channel.use { fc ->
-            return fc.map(FileChannel.MapMode.READ_ONLY, afd.startOffset, afd.declaredLength)
+        try {
+            Log.d(TAG, "📁 Loading TensorFlow Lite model: $MODEL_FILE")
+            val afd = context.assets.openFd(MODEL_FILE)
+            Log.d(TAG, "📁 Model file descriptor: start=${afd.startOffset}, length=${afd.declaredLength}")
+            
+            FileInputStream(afd.fileDescriptor).channel.use { fc ->
+                val buffer = fc.map(FileChannel.MapMode.READ_ONLY, afd.startOffset, afd.declaredLength)
+                Log.d(TAG, "✅ Model loaded successfully: ${buffer.capacity()} bytes")
+                return buffer
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "🚨 Failed to load model file $MODEL_FILE", e)
+            throw e
         }
     }
 
@@ -113,21 +123,38 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
     override fun infer(frame: Bitmap): FrameResult {
         val ts = System.nanoTime()
         return try {
-            val interpreter = this.interpreter ?: return FrameResult(null, ts)
-            val input = this.inputBuffer ?: return FrameResult(null, ts)
-            val output = this.outputBuffer ?: return FrameResult(null, ts)
+            val interpreter = this.interpreter ?: run {
+                Log.e(TAG, "🚨 Interpreter is null - model not loaded properly")
+                return FrameResult(null, ts)
+            }
+            val input = this.inputBuffer ?: run {
+                Log.e(TAG, "🚨 Input buffer is null")
+                return FrameResult(null, ts)
+            }
+            val output = this.outputBuffer ?: run {
+                Log.e(TAG, "🚨 Output buffer is null")
+                return FrameResult(null, ts)
+            }
 
+            Log.d(TAG, "🤖 TFLite inference starting - frame: ${frame.width}x${frame.height}")
+            
             val preprocessed = preprocessFrame(frame)
+            Log.d(TAG, "🔄 Preprocessed frame: ${preprocessed.width}x${preprocessed.height}")
+            
             bitmapToBuffer(preprocessed, input)
+            Log.d(TAG, "📊 Input buffer prepared")
 
             input.rewind(); output.rewind()
             interpreter.run(input, output)
+            Log.d(TAG, "🧠 Model inference completed")
 
             val det = parseOutput(output, frame.width, frame.height)
+            Log.d(TAG, "📋 Parsed output: ${det?.let { "ball at (${it.cx}, ${it.cy}) conf=${it.conf}" } ?: "no detection"}")
+            
             preprocessed.recycle()
             FrameResult(det, ts)
         } catch (e: Exception) {
-            Log.e(TAG, "Inference failed", e)
+            Log.e(TAG, "🚨 TFLite inference failed: ${e.message}", e)
             FrameResult(null, ts)
         }
     }
