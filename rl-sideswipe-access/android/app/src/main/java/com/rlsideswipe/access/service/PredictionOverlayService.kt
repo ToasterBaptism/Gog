@@ -51,6 +51,16 @@ class PredictionOverlayService : Service() {
         fun disableTouchMode() {
             instance?.overlayView?.disableTouchMode()
         }
+        
+        fun startManualMode() {
+            instance?.overlayView?.let { view ->
+                view.enableTouchMode()
+                // Start manual mode at center of screen
+                val centerX = view.width / 2f
+                val centerY = view.height / 2f
+                view.startManualMode(centerX, centerY)
+            }
+        }
     }
     
     private var windowManager: WindowManager? = null
@@ -600,6 +610,51 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
             canvas.drawText("🖱️ OVERLAY NON-TOUCHABLE - Touches pass through", width / 2f, indicatorY, touchIndicatorPaint)
             canvas.drawText("Use app controls to enable manual ball positioning", width / 2f, indicatorY + 40f, touchIndicatorPaint)
         }
+        
+        // Draw prominent manual mode activation indicator when not in manual mode and touch mode disabled
+        if (!isManualMode && !touchModeEnabled) {
+            val manualModeButtonPaint = Paint().apply {
+                color = Color.argb(180, 255, 165, 0) // Semi-transparent orange
+                textSize = 28f
+                isAntiAlias = true
+                textAlign = Paint.Align.CENTER
+                setShadowLayer(4f, 2f, 2f, Color.BLACK)
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+            }
+            
+            // Draw prominent button-like indicator at top center
+            val buttonY = 120f
+            val buttonWidth = 400f
+            val buttonHeight = 80f
+            val buttonX = width / 2f
+            
+            // Draw button background
+            val buttonBgPaint = Paint().apply {
+                color = Color.argb(120, 255, 165, 0) // Semi-transparent orange background
+                style = Paint.Style.FILL
+                isAntiAlias = true
+            }
+            val buttonRect = RectF(
+                buttonX - buttonWidth/2, 
+                buttonY - buttonHeight/2,
+                buttonX + buttonWidth/2, 
+                buttonY + buttonHeight/2
+            )
+            canvas.drawRoundRect(buttonRect, 20f, 20f, buttonBgPaint)
+            
+            // Draw button border
+            val buttonBorderPaint = Paint().apply {
+                color = Color.argb(255, 255, 165, 0) // Solid orange border
+                style = Paint.Style.STROKE
+                strokeWidth = 4f
+                isAntiAlias = true
+            }
+            canvas.drawRoundRect(buttonRect, 20f, 20f, buttonBorderPaint)
+            
+            // Draw button text
+            canvas.drawText("🎯 MANUAL BALL MODE AVAILABLE", buttonX, buttonY - 5f, manualModeButtonPaint)
+            canvas.drawText("Use React Native app controls to enable", buttonX, buttonY + 25f, manualModeButtonPaint)
+        }
     }
     
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -697,7 +752,7 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
         }
     }
     
-    private fun startManualMode(touchX: Float, touchY: Float) {
+    fun startManualMode(touchX: Float, touchY: Float) {
         isManualMode = true
         manualBallPosition = Pair(touchX, touchY)
         showControlButtons = false // Don't show buttons immediately, wait for drag to finish

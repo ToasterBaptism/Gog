@@ -386,9 +386,15 @@ class ScreenCaptureService : Service() {
                 latestScreenBitmap?.recycle() // Clean up previous bitmap
                 latestScreenBitmap = bitmap.copy(bitmap.config, false)
                 
-                // Use TensorFlow Lite inference engine for ball detection
+                // Use inference engine for ball detection, fallback to template matching if needed
                 Log.d(TAG, "🤖 Using inference engine: ${inferenceEngine?.javaClass?.simpleName}")
-                val ballDetection = inferenceEngine?.infer(bitmap)
+                var ballDetection = inferenceEngine?.infer(bitmap)
+                
+                // If inference engine returns null (like StubInferenceEngine), use template matching fallback
+                if (ballDetection?.ball == null) {
+                    Log.d(TAG, "🔄 Inference engine returned null, using template matching fallback")
+                    ballDetection = detectBallSimple(bitmap)
+                }
                 
                 // Update statistics
                 framesProcessed++

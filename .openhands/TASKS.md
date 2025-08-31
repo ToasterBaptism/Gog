@@ -1,21 +1,13 @@
 # Task List
 
-1. ✅ Fix overlay blocking all touch events
+1. ✅ Investigate ball detection and projection issues
 
-2. ✅ Add FLAG_NOT_TOUCHABLE by default to overlay
+2. ✅ Fix stub inference engine to use template matching fallback
 
-3. ✅ Implement mechanism to toggle overlay touchability
+3. ✅ Add UI indicators/buttons for easier manual mode switching
 
-4. ✅ Fix onTouchEvent to not consume events unnecessarily
+4. 🔄 Build new stub-only APK (no TensorFlow Lite)
 
-5. ✅ Test overlay fixes and build new APK
-
-6. ✅ Fix MainActivity launcher thread safety - ensure UI thread
-
-7. ✅ Remove canDrawOverlays() check for TYPE_ACCESSIBILITY_OVERLAY
-
-8. ✅ Guard against divide-by-zero in coordinate transform
-
-9. ✅ Fix destructuring type bug with null to null
+5. ⏳ Test ball acquisition and projection functionality
 
 
