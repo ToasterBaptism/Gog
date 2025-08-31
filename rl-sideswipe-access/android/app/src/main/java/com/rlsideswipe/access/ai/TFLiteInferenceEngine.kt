@@ -300,7 +300,7 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
         
         try {
             Log.d(TAG, "🔥 Starting model warmup...")
-            val dummy = Bitmap.createBitmap(INPUT_SIZE, INPUT_SIZE, Bitmap.Config.ARGB_8888)
+            val dummy = Bitmap.createBitmap(inputWidth.coerceAtLeast(1), inputHeight.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
             
             repeat(MAX_WARMUP_ATTEMPTS) { attempt ->
                 val start = System.nanoTime()
