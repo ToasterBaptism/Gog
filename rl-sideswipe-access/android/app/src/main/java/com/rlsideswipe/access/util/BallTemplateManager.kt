@@ -731,6 +731,42 @@ class BallTemplateManager(private val context: Context) {
     fun getTemplateNames(): List<String> = ballTemplates.map { it.name }
     
     /**
+     * Add a learned template from manual ball positioning
+     */
+    fun addLearnedTemplate(bitmap: Bitmap) {
+        try {
+            // Create a copy to avoid external modifications
+            val templateCopy = bitmap.copy(bitmap.config, false)
+            
+            // Generate unique name for learned template
+            val learnedCount = ballTemplates.count { it.name.startsWith("learned_") }
+            val templateName = "learned_${learnedCount + 1}_${System.currentTimeMillis()}"
+            
+            // Create metadata for learned template
+            val metadata = TemplateMetadata(
+                lightingCondition = "learned",
+                ballState = "manual_positioned",
+                mapType = "user_game",
+                confidence = 1.2f // Higher confidence for user-provided templates
+            )
+            
+            // Add to templates list
+            val learnedTemplate = BallTemplate(templateName, templateCopy, metadata)
+            ballTemplates.add(learnedTemplate)
+            
+            Log.d(TAG, "📸 Added learned template: $templateName (${templateCopy.width}x${templateCopy.height})")
+            Log.d(TAG, "📸 Total templates now: ${ballTemplates.size}")
+            
+            // Log template statistics
+            val learnedTemplatesCount = ballTemplates.count { it.name.startsWith("learned_") }
+            Log.d(TAG, "📸 Learned templates: $learnedTemplatesCount, Built-in templates: ${ballTemplates.size - learnedTemplatesCount}")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "📸 Error adding learned template", e)
+        }
+    }
+    
+    /**
      * Clean up resources
      */
     fun cleanup() {

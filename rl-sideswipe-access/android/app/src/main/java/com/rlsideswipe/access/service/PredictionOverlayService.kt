@@ -39,6 +39,10 @@ class PredictionOverlayService : Service() {
         fun updateScreenInfo(width: Int, height: Int, isLandscape: Boolean) {
             instance?.updateScreenInfo(width, height, isLandscape)
         }
+        
+        fun requestTemplateCapture(x: Float, y: Float) {
+            instance?.requestTemplateCapture(x, y)
+        }
     }
     
     private var windowManager: WindowManager? = null
@@ -141,6 +145,15 @@ class PredictionOverlayService : Service() {
     
     fun updateScreenInfo(width: Int, height: Int, isLandscape: Boolean) {
         overlayView?.updateScreenInfo(width, height, isLandscape)
+    }
+    
+    fun requestTemplateCapture(x: Float, y: Float) {
+        // Request screen capture service to capture template at this position
+        val intent = Intent("com.rlsideswipe.access.CAPTURE_TEMPLATE")
+        intent.putExtra("x", x)
+        intent.putExtra("y", y)
+        sendBroadcast(intent)
+        Log.d(TAG, "🎯 Requested template capture at ($x, $y)")
     }
     
     data class PredictionPoint(
@@ -461,7 +474,19 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
             MotionEvent.ACTION_UP -> {
                 if (isDragging) {
                     isDragging = false
-                    Log.d(TAG, "🖱️ Manual drag ended. Ball position: ${manualBallPosition}")
+                    val finalPos = manualBallPosition
+                    Log.d(TAG, "🖱️ Manual drag ended. Ball position: $finalPos")
+                    
+                    // Capture template at the final position
+                    if (finalPos != null) {
+                        // Convert overlay coordinates back to screen coordinates for template capture
+                        val screenX = finalPos.first * screenWidth / width
+                        val screenY = finalPos.second * screenHeight / height
+                        
+                        Log.d(TAG, "📸 Requesting template capture at screen coords ($screenX, $screenY)")
+                        PredictionOverlayService.requestTemplateCapture(screenX, screenY)
+                    }
+                    
                     // Keep manual mode active until user double-taps to disable
                     return true
                 }

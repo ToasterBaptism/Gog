@@ -1,7 +1,10 @@
 package com.rlsideswipe.access.service
 
 import android.app.*
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.ImageFormat
@@ -71,6 +74,10 @@ class ScreenCaptureService : Service() {
     private var backgroundHandler: Handler? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     
+    // Template learning system
+    private var templateCaptureReceiver: BroadcastReceiver? = null
+    private var latestScreenBitmap: Bitmap? = null
+    
     private var lastFrameTime = 0L
     private var frameCount = 0
     
@@ -100,6 +107,7 @@ class ScreenCaptureService : Service() {
         createNotificationChannel()
         setupBackgroundThread()
         initializeBallTemplateManager()
+        setupTemplateCaptureReceiver()
         lastPerformanceLog = System.currentTimeMillis()
         startTime = System.currentTimeMillis()
         Log.d(TAG, "ScreenCaptureService created")
@@ -374,6 +382,10 @@ class ScreenCaptureService : Service() {
             // AI-powered frame processing with TensorFlow Lite
             val bitmap = convertImageToBitmapSafely(image)
             if (bitmap != null) {
+                // Store latest bitmap for template learning (create a copy to avoid recycling issues)
+                latestScreenBitmap?.recycle() // Clean up previous bitmap
+                latestScreenBitmap = bitmap.copy(bitmap.config, false)
+                
                 // Use TensorFlow Lite inference engine for ball detection
                 Log.d(TAG, "🤖 Using inference engine: ${inferenceEngine?.javaClass?.simpleName}")
                 val ballDetection = inferenceEngine?.infer(bitmap)
@@ -682,6 +694,83 @@ class ScreenCaptureService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize ball template manager", e)
         }
+    }
+    
+    private fun setupTemplateCaptureReceiver() {
+        templateCaptureReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == "com.rlsideswipe.access.CAPTURE_TEMPLATE") {
+                    val x = intent.getFloatExtra("x", -1f)
+                    val y = intent.getFloatExtra("y", -1f)
+                    
+                    if (x >= 0 && y >= 0) {
+                        Log.d(TAG, "📸 Received template capture request at ($x, $y)")
+                        captureTemplateAtPosition(x, y)
+                    }
+                }
+            }
+        }
+        
+        val filter = IntentFilter("com.rlsideswipe.access.CAPTURE_TEMPLATE")
+        registerReceiver(templateCaptureReceiver, filter)
+        Log.d(TAG, "📸 Template capture receiver registered")
+    }
+    
+    private fun captureTemplateAtPosition(x: Float, y: Float) {
+        // We need to capture the current screen bitmap and extract the 80x80 region around (x, y)
+        backgroundHandler?.post {
+            try {
+                // Get the latest captured bitmap
+                val currentBitmap = getCurrentScreenBitmap()
+                if (currentBitmap != null) {
+                    val templateSize = 80
+                    val halfSize = templateSize / 2
+                    
+                    // Calculate bounds for extraction
+                    val left = (x - halfSize).toInt().coerceAtLeast(0)
+                    val top = (y - halfSize).toInt().coerceAtLeast(0)
+                    val right = (x + halfSize).toInt().coerceAtMost(currentBitmap.width)
+                    val bottom = (y + halfSize).toInt().coerceAtMost(currentBitmap.height)
+                    
+                    // Extract the region
+                    val extractedRegion = Bitmap.createBitmap(
+                        currentBitmap, 
+                        left, 
+                        top, 
+                        right - left, 
+                        bottom - top
+                    )
+                    
+                    // Scale to exactly 80x80 if needed
+                    val finalTemplate = if (extractedRegion.width != templateSize || extractedRegion.height != templateSize) {
+                        Bitmap.createScaledBitmap(extractedRegion, templateSize, templateSize, true)
+                    } else {
+                        extractedRegion
+                    }
+                    
+                    // Add this template to the BallTemplateManager
+                    ballTemplateManager?.addLearnedTemplate(finalTemplate)
+                    
+                    Log.d(TAG, "📸 Successfully captured and added learned template at ($x, $y)")
+                    Log.d(TAG, "📸 Template size: ${finalTemplate.width}x${finalTemplate.height}")
+                    
+                    // Clean up if we created a scaled version
+                    if (finalTemplate != extractedRegion) {
+                        extractedRegion.recycle()
+                    }
+                } else {
+                    Log.w(TAG, "📸 No current bitmap available for template capture")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "📸 Error capturing template at ($x, $y)", e)
+            }
+        }
+    }
+    
+    private fun getCurrentScreenBitmap(): Bitmap? {
+        // This should return the most recent screen capture
+        // We'll need to store the latest bitmap from the image processing
+        return latestScreenBitmap
     }
     
     // Create realistic Rocket League ball template based on provided images
@@ -1421,6 +1510,21 @@ class ScreenCaptureService : Service() {
             inferenceEngine?.close()
             ballTemplateManager?.cleanup()
         }
+        
+        // Clean up template learning system
+        templateCaptureReceiver?.let { receiver ->
+            try {
+                unregisterReceiver(receiver)
+                Log.d(TAG, "📸 Template capture receiver unregistered")
+            } catch (e: Exception) {
+                Log.w(TAG, "Error unregistering template capture receiver", e)
+            }
+        }
+        templateCaptureReceiver = null
+        
+        // Clean up latest bitmap
+        latestScreenBitmap?.recycle()
+        latestScreenBitmap = null
         
         backgroundThread?.quitSafely()
         backgroundThread = null
