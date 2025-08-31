@@ -1,13 +1,13 @@
 # Task List
 
-1. ✅ Investigate ball detection and projection issues
+1. ✅ Fix broken screen capture (FPS = 0.0)
 
-2. ✅ Fix stub inference engine to use template matching fallback
+2. ✅ Find and restore template learning system
 
-3. ✅ Add UI indicators/buttons for easier manual mode switching
+3. ✅ Add button to manually create ball templates
 
-4. 🔄 Build new stub-only APK (no TensorFlow Lite)
+4. ⏳ Fix ball detection coordinates (pink square in top-left)
 
-5. ⏳ Test ball acquisition and projection functionality
+5. ⏳ Test complete ball detection and projection system
 
 

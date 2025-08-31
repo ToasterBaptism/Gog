@@ -311,6 +311,41 @@ const StartScreen: React.FC = () => {
     }
   };
 
+  const enableManualBallPositioning = async () => {
+    try {
+      await NativeControl.enableManualBallPositioning();
+      Alert.alert(
+        '🎯 Manual Ball Positioning Enabled',
+        'You can now tap on the ball in the game to capture it as a template for better detection.\n\n' +
+        '1. Go to your game\n' +
+        '2. Find a clear view of the ball\n' +
+        '3. Tap directly on the ball\n' +
+        '4. The app will learn this ball pattern'
+      );
+    } catch (error) {
+      console.log('Failed to enable manual positioning:', error);
+      Alert.alert('Error', 'Failed to enable manual ball positioning');
+    }
+  };
+
+  const captureTemplateAtCenter = async () => {
+    try {
+      // Capture template at screen center (common ball position)
+      await NativeControl.captureTemplateAtPosition(0.5, 0.5);
+      Alert.alert(
+        '📸 Template Captured',
+        'Ball template captured at screen center. This will help improve ball detection accuracy.'
+      );
+      
+      // Update template count
+      const stats = await NativeControl.getDetectionStatistics();
+      setDetectionStats(stats);
+    } catch (error) {
+      console.log('Failed to capture template:', error);
+      Alert.alert('Error', 'Failed to capture ball template');
+    }
+  };
+
   const formatLastDetection = (timestamp: number) => {
     if (timestamp === 0) return 'Never';
     const now = Date.now();
@@ -386,6 +421,14 @@ const StartScreen: React.FC = () => {
             
             <TouchableOpacity style={styles.resetButton} onPress={resetStatistics}>
               <Text style={styles.resetButtonText}>🔄 Reset Stats</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.templateButton} onPress={enableManualBallPositioning}>
+              <Text style={styles.templateButtonText}>🎯 Enable Manual Ball Capture</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.templateButton} onPress={captureTemplateAtCenter}>
+              <Text style={styles.templateButtonText}>📸 Capture Ball Template</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -495,6 +538,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   resetButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  templateButton: {
+    marginTop: 8,
+    padding: 12,
+    backgroundColor: '#FF6B35',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  templateButtonText: {
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '600',

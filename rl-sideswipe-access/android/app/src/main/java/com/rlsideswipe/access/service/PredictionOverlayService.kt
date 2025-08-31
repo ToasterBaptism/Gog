@@ -61,6 +61,13 @@ class PredictionOverlayService : Service() {
                 view.startManualMode(centerX, centerY)
             }
         }
+        
+        fun getInstance(): PredictionOverlayService? = instance
+        
+        fun enableManualPositioning() {
+            Log.d(TAG, "🎯 Enabling manual ball positioning mode")
+            instance?.overlayView?.enableTouchMode()
+        }
     }
     
     private var windowManager: WindowManager? = null

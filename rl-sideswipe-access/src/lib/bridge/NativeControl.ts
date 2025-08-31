@@ -30,6 +30,9 @@ interface NativeControlInterface {
   debugPermissionSystem(): Promise<any>;
   getDetectionStatistics(): Promise<DetectionStatistics>;
   resetDetectionStatistics(): Promise<void>;
+  captureTemplateAtPosition(x: number, y: number): Promise<boolean>;
+  enableManualBallPositioning(): Promise<boolean>;
+  getTemplateCount(): Promise<number>;
 }
 
 const NativeControl = NativeModules.NativeControlModule as NativeControlInterface | undefined;
@@ -58,6 +61,9 @@ const Fallback: NativeControlInterface = {
     templatesLoaded: 0,
   }),
   resetDetectionStatistics: async () => { throw new Error('NativeControlModule not linked'); },
+  captureTemplateAtPosition: async () => { throw new Error('NativeControlModule not linked'); },
+  enableManualBallPositioning: async () => { throw new Error('NativeControlModule not linked'); },
+  getTemplateCount: async () => 0,
 };
 
 export default (NativeControl ?? Fallback);

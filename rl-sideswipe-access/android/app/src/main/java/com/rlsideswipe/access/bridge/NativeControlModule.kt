@@ -774,4 +774,50 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
             promise.reject("ERROR", "Failed to reset detection statistics: ${e.message}", e)
         }
     }
+    
+    @ReactMethod
+    fun captureTemplateAtPosition(x: Double, y: Double, promise: Promise) {
+        try {
+            Log.d("NativeControl", "📸 Capturing template at position ($x, $y)")
+            
+            // Send broadcast to ScreenCaptureService to capture template
+            val intent = Intent("com.rlsideswipe.access.CAPTURE_TEMPLATE")
+            intent.putExtra("x", x.toFloat())
+            intent.putExtra("y", y.toFloat())
+            reactApplicationContext.sendBroadcast(intent)
+            
+            promise.resolve(true)
+        } catch (e: Exception) {
+            Log.e("NativeControl", "Failed to capture template", e)
+            promise.reject("ERROR", "Failed to capture template: ${e.message}", e)
+        }
+    }
+    
+    @ReactMethod
+    fun enableManualBallPositioning(promise: Promise) {
+        try {
+            Log.d("NativeControl", "🎯 Enabling manual ball positioning mode")
+            
+            // Send broadcast to enable manual positioning mode
+            val intent = Intent("com.rlsideswipe.access.ENABLE_MANUAL_POSITIONING")
+            reactApplicationContext.sendBroadcast(intent)
+            
+            promise.resolve(true)
+        } catch (e: Exception) {
+            Log.e("NativeControl", "Failed to enable manual positioning", e)
+            promise.reject("ERROR", "Failed to enable manual positioning: ${e.message}", e)
+        }
+    }
+    
+    @ReactMethod
+    fun getTemplateCount(promise: Promise) {
+        try {
+            val service = com.rlsideswipe.access.service.ScreenCaptureService.getInstance()
+            val count = service?.getTemplatesLoaded() ?: 0
+            promise.resolve(count)
+        } catch (e: Exception) {
+            Log.e("NativeControl", "Failed to get template count", e)
+            promise.reject("ERROR", "Failed to get template count: ${e.message}", e)
+        }
+    }
 }

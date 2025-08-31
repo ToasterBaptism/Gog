@@ -482,7 +482,6 @@ class ScreenCaptureService : Service() {
     }
     
     private fun detectBallSimple(bitmap: Bitmap): FrameResult? {
-        var detectionCount = 0
         return try {
             // Shape-based ball detection using circular object detection
             val width = bitmap.width
@@ -527,9 +526,6 @@ class ScreenCaptureService : Service() {
             
             // 🎯 PRIMARY: Multi-template matching for specific ball detection
             val templateMatches = detectBallUsingMultiTemplate(bitmap, searchStartX, searchEndX, searchStartY, searchEndY)
-            
-            // Track detections for statistics update in finally block
-            detectionCount = templateMatches.size
             
             Log.d(TAG, "🔍 DETECTION RESULTS: ${templateMatches.size} template matches found")
             
@@ -684,12 +680,8 @@ class ScreenCaptureService : Service() {
             Log.e(TAG, "Simple ball detection failed", e)
             null
         } finally {
-            // Update statistics in finally block to ensure per-frame accounting
-            framesProcessed++
-            if (detectionCount > 0) {
-                ballsDetected += detectionCount
-                lastDetectionTime = System.currentTimeMillis()
-            }
+            // Statistics are handled in the main processing loop, not here
+            // This prevents double-counting of frames
         }
     }
     
@@ -990,21 +982,31 @@ class ScreenCaptureService : Service() {
     private fun setupTemplateCaptureReceiver() {
         templateCaptureReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                if (intent?.action == "com.rlsideswipe.access.CAPTURE_TEMPLATE") {
-                    val x = intent.getFloatExtra("x", -1f)
-                    val y = intent.getFloatExtra("y", -1f)
-                    
-                    if (x >= 0 && y >= 0) {
-                        Log.d(TAG, "📸 Received template capture request at ($x, $y)")
-                        captureTemplateAtPosition(x, y)
+                when (intent?.action) {
+                    "com.rlsideswipe.access.CAPTURE_TEMPLATE" -> {
+                        val x = intent.getFloatExtra("x", -1f)
+                        val y = intent.getFloatExtra("y", -1f)
+                        
+                        if (x >= 0 && y >= 0) {
+                            Log.d(TAG, "📸 Received template capture request at ($x, $y)")
+                            captureTemplateAtPosition(x, y)
+                        }
+                    }
+                    "com.rlsideswipe.access.ENABLE_MANUAL_POSITIONING" -> {
+                        Log.d(TAG, "🎯 Enabling manual ball positioning mode")
+                        // Enable manual positioning mode in overlay service
+                        com.rlsideswipe.access.service.PredictionOverlayService.enableManualPositioning()
                     }
                 }
             }
         }
         
-        val filter = IntentFilter("com.rlsideswipe.access.CAPTURE_TEMPLATE")
+        val filter = IntentFilter().apply {
+            addAction("com.rlsideswipe.access.CAPTURE_TEMPLATE")
+            addAction("com.rlsideswipe.access.ENABLE_MANUAL_POSITIONING")
+        }
         registerReceiver(templateCaptureReceiver, filter)
-        Log.d(TAG, "📸 Template capture receiver registered")
+        Log.d(TAG, "📸 Template capture and manual positioning receiver registered")
     }
     
     private fun captureTemplateAtPosition(x: Float, y: Float) {
