@@ -227,12 +227,17 @@ class NativeControlModule(reactContext: ReactApplicationContext) : ReactContextB
             }
             
             // Check install-time permissions (these are automatically granted if declared in manifest)
-            val installTimePermissions = listOf(
+            val installTimePermissions = mutableListOf(
                 Manifest.permission.VIBRATE,
-                Manifest.permission.WAKE_LOCK,
-                Manifest.permission.FOREGROUND_SERVICE,
-                Manifest.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION
-            )
+                Manifest.permission.WAKE_LOCK
+            ).apply {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    add(Manifest.permission.FOREGROUND_SERVICE)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    add(Manifest.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION)
+                }
+            }
             
             for (permission in installTimePermissions) {
                 // Install-time permissions are granted if they're in the manifest
