@@ -8,6 +8,6 @@
 
 4. ✅ Fix onTouchEvent to not consume events unnecessarily
 
-5. 🔄 Test overlay fixes and build new APK
+5. ✅ Test overlay fixes and build new APK
 
 
