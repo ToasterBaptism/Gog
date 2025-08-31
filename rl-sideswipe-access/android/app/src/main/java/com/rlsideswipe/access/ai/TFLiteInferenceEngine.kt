@@ -54,6 +54,10 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
         val outputDataType: org.tensorflow.lite.DataType,
         val inputQuantized: Boolean,
         val outputQuantized: Boolean,
+        val inputScale: Float?,
+        val inputZeroPoint: Int?,
+        val outputScale: Float?,
+        val outputZeroPoint: Int?,
         val version: String
     )
 
@@ -168,6 +172,22 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
             inputWidth = inShape.getOrNull(2) ?: inputWidth
             inputChannels = inShape.getOrNull(3) ?: inputChannels
 
+            // Attempt to read quantization params if available
+            var inScale: Float? = null
+            var inZero: Int? = null
+            var outScale: Float? = null
+            var outZero: Int? = null
+            try {
+                val inQuant = inputTensor.quantizationParams()
+                inScale = inQuant.scale
+                inZero = inQuant.zeroPoint
+            } catch (_: Throwable) {}
+            try {
+                val outQuant = outputTensor.quantizationParams()
+                outScale = outQuant.scale
+                outZero = outQuant.zeroPoint
+            } catch (_: Throwable) {}
+
             modelMetadata = ModelMetadata(
                 inputShape = inShape,
                 outputShape = outShape,
@@ -175,6 +195,10 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
                 outputDataType = outputTensor.dataType(),
                 inputQuantized = inputTensor.dataType() != org.tensorflow.lite.DataType.FLOAT32,
                 outputQuantized = outputTensor.dataType() != org.tensorflow.lite.DataType.FLOAT32,
+                inputScale = inScale,
+                inputZeroPoint = inZero,
+                outputScale = outScale,
+                outputZeroPoint = outZero,
                 version = "v1.0"
             )
 
@@ -231,11 +255,12 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
                 outputBuffer = ByteBuffer.allocateDirect(outputSize).apply { order(ByteOrder.nativeOrder()) }
                 Log.d(TAG, "📦 Buffers initialized (dynamic): input=${inputSize}B (${inTensor.dataType()} ${inTensor.shape().contentToString()}), output=${outputSize}B (${outTensor.dataType()} ${outTensor.shape().contentToString()})")
             } else {
-                val inputSize = INPUT_SIZE * INPUT_SIZE * CHANNELS * BYTES_PER_CHANNEL
+                val inElems = inputWidth * inputHeight * inputChannels
+                val inputSize = inElems * 4
                 inputBuffer = ByteBuffer.allocateDirect(inputSize).apply { order(ByteOrder.nativeOrder()) }
-                val outputSize = OUTPUT_SIZE * BYTES_PER_CHANNEL
+                val outputSize = 5 * 4
                 outputBuffer = ByteBuffer.allocateDirect(outputSize).apply { order(ByteOrder.nativeOrder()) }
-                Log.w(TAG, "📦 Buffers initialized (fallback): input=${inputSize}B, output=${outputSize}B")
+                Log.w(TAG, "📦 Buffers initialized (fallback dynamic): input=${inputSize}B, output=${outputSize}B")
             }
         } catch (e: Exception) {
             Log.e(TAG, "🚨 Buffer initialization failed", e)
@@ -248,24 +273,25 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
      */
     private fun createHanningWindow() {
         try {
-            val size = inputWidth
-            val center = size / 2f
-            val radius = center * 0.9f
-            
-            hanningWindow = FloatArray(size * size) { i ->
-                val x = i % size
-                val y = i / size
-                val dx = x - center
-                val dy = y - center
+            val w = inputWidth
+            val h = inputHeight
+            val cx = w / 2f
+            val cy = h / 2f
+            val radius = (min(w, h) / 2f) * 0.9f
+
+            hanningWindow = FloatArray(w * h) { i ->
+                val x = i % w
+                val y = i / w
+                val dx = x - cx
+                val dy = y - cy
                 val distance = sqrt(dx * dx + dy * dy)
-                
                 if (distance <= radius) {
                     val normalized = distance / radius
                     (0.5 * (1.0 + cos(PI * normalized))).toFloat()
                 } else 0f
             }
-            
-            Log.d(TAG, "🌊 Hanning window created: ${size}x${size}")
+
+            Log.d(TAG, "🌊 Hanning window created: ${w}x${h}")
         } catch (e: Exception) {
             Log.e(TAG, "🚨 Hanning window creation failed", e)
             throw e
@@ -422,8 +448,8 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
             
         } catch (e: Exception) {
             Log.e(TAG, "🚨 Advanced preprocessing failed: ${e.message}", e)
-            // Fallback to simple scaling
-            Bitmap.createScaledBitmap(frame, INPUT_SIZE, INPUT_SIZE, true)
+            // Fallback to simple scaling using dynamic dimensions
+            Bitmap.createScaledBitmap(frame, inputWidth.coerceAtLeast(1), inputHeight.coerceAtLeast(1), true)
         }
     }
 
@@ -477,36 +503,54 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
             // Write according to input tensor dtype (float/uint8/int8) and channel count
             when (modelMetadata?.inputDataType) {
                 org.tensorflow.lite.DataType.UINT8 -> {
+                    val scale = modelMetadata?.inputScale ?: 1f
+                    val zero = modelMetadata?.inputZeroPoint ?: 0
                     if (inputChannels == 1) {
                         for (p in pixels) {
                             val r = (p ushr 16) and 0xFF
                             val g = (p ushr 8) and 0xFF
                             val b = p and 0xFF
                             val gray = ((0.299f * r) + (0.587f * g) + (0.114f * b)).toInt().coerceIn(0, 255)
-                            buffer.put(gray.toByte())
+                            val q = ((gray - zero) * scale).coerceIn(0f, 255f)
+                            buffer.put(q.toInt().coerceIn(0,255).toByte())
                         }
                     } else {
                         for (p in pixels) {
-                            buffer.put(((p ushr 16) and 0xFF).toByte())
-                            buffer.put(((p ushr 8) and 0xFF).toByte())
-                            buffer.put((p and 0xFF).toByte())
+                            val r = (p ushr 16) and 0xFF
+                            val g = (p ushr 8) and 0xFF
+                            val b = p and 0xFF
+                            val rq = ((r - zero) * scale).coerceIn(0f,255f).toInt()
+                            val gq = ((g - zero) * scale).coerceIn(0f,255f).toInt()
+                            val bq = ((b - zero) * scale).coerceIn(0f,255f).toInt()
+                            buffer.put(rq.coerceIn(0,255).toByte())
+                            buffer.put(gq.coerceIn(0,255).toByte())
+                            buffer.put(bq.coerceIn(0,255).toByte())
                         }
                     }
                 }
                 org.tensorflow.lite.DataType.INT8 -> {
+                    val scale = modelMetadata?.inputScale ?: (1f / 127f)
+                    val zero = modelMetadata?.inputZeroPoint ?: 0
                     if (inputChannels == 1) {
                         for (p in pixels) {
                             val r = (p ushr 16) and 0xFF
                             val g = (p ushr 8) and 0xFF
                             val b = p and 0xFF
-                            val gray = ((0.299f * r) + (0.587f * g) + (0.114f * b)).toInt().coerceIn(0, 255) - 128
-                            buffer.put(gray.toByte())
+                            val gray = ((0.299f * r) + (0.587f * g) + (0.114f * b)).toInt().coerceIn(0, 255)
+                            val q = (((gray - zero) * scale).roundToInt()).coerceIn(-128, 127)
+                            buffer.put(q.toByte())
                         }
                     } else {
                         for (p in pixels) {
-                            buffer.put((((p ushr 16) and 0xFF) - 128).toByte())
-                            buffer.put((((p ushr 8) and 0xFF) - 128).toByte())
-                            buffer.put(((p and 0xFF) - 128).toByte())
+                            val r = (p ushr 16) and 0xFF
+                            val g = (p ushr 8) and 0xFF
+                            val b = p and 0xFF
+                            val rq = (((r - zero) * scale).roundToInt()).coerceIn(-128, 127)
+                            val gq = (((g - zero) * scale).roundToInt()).coerceIn(-128, 127)
+                            val bq = (((b - zero) * scale).roundToInt()).coerceIn(-128, 127)
+                            buffer.put(rq.toByte())
+                            buffer.put(gq.toByte())
+                            buffer.put(bq.toByte())
                         }
                     }
                 }
@@ -552,20 +596,24 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
                 val dtype = modelMetadata?.outputDataType
                 when (dtype) {
                     org.tensorflow.lite.DataType.UINT8 -> {
-                        x = (out.get().toInt() and 0xFF) / 255f
-                        y = (out.get().toInt() and 0xFF) / 255f
-                        w = (out.get().toInt() and 0xFF) / 255f
-                        h = (out.get().toInt() and 0xFF) / 255f
-                        conf = (out.get().toInt() and 0xFF) / 255f
+                        val scale = modelMetadata?.outputScale ?: (1f / 255f)
+                        val zero = modelMetadata?.outputZeroPoint ?: 0
+                        fun q(): Float = ((out.get().toInt() and 0xFF) - zero) * scale
+                        x = q().coerceIn(0f,1f)
+                        y = q().coerceIn(0f,1f)
+                        w = q().coerceIn(0f,1f)
+                        h = q().coerceIn(0f,1f)
+                        conf = q().coerceIn(0f,1f)
                     }
                     org.tensorflow.lite.DataType.INT8 -> {
-                        fun q(): Float = ((out.get().toInt()).coerceIn(-128,127) / 127f).coerceIn(-1f,1f)
-                        val qx = q(); val qy = q(); val qw = q(); val qh = q(); val qc = q()
-                        x = (qx + 1f) * 0.5f
-                        y = (qy + 1f) * 0.5f
-                        w = (qw + 1f) * 0.5f
-                        h = (qh + 1f) * 0.5f
-                        conf = (qc + 1f) * 0.5f
+                        val scale = modelMetadata?.outputScale ?: (1f / 127f)
+                        val zero = modelMetadata?.outputZeroPoint ?: 0
+                        fun q(): Float = ((out.get().toInt()).coerceIn(-128,127) - zero) * scale
+                        x = q().coerceIn(0f,1f)
+                        y = q().coerceIn(0f,1f)
+                        w = q().coerceIn(0f,1f)
+                        h = q().coerceIn(0f,1f)
+                        conf = q().coerceIn(0f,1f)
                     }
                     else -> {
                         x = out.float
