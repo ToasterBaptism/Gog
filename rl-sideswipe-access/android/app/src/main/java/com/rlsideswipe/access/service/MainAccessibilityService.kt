@@ -41,8 +41,10 @@ class MainAccessibilityService : AccessibilityService() {
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             Log.d(TAG, "Service connected: $name")
-            // Simplified - don't try to get service reference to avoid crashes
-            isServiceBound = true
+            val local = service as? ScreenCaptureService.LocalBinder
+            screenCaptureService = local?.getService()
+            isServiceBound = screenCaptureService != null
+            observeScreenCaptureData()
         }
         
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -64,7 +66,8 @@ class MainAccessibilityService : AccessibilityService() {
         mainHandler.postDelayed({
             try {
                 setupOverlay()
-                observeScreenCaptureData()
+                val intent = Intent(this, ScreenCaptureService::class.java)
+                bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
                 Log.i(TAG, "✅ Accessibility service setup completed successfully")
             } catch (e: Exception) {
                 Log.e(TAG, "🚨 Error during service setup", e)
@@ -73,7 +76,8 @@ class MainAccessibilityService : AccessibilityService() {
                     Log.i(TAG, "🔄 Attempting service recovery...")
                     try {
                         setupOverlay()
-                        observeScreenCaptureData()
+                        val intent = Intent(this, ScreenCaptureService::class.java)
+                        bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
                     } catch (e2: Exception) {
                         Log.e(TAG, "🚨 Service recovery failed", e2)
                     }
@@ -116,17 +120,18 @@ class MainAccessibilityService : AccessibilityService() {
         }
     }
     
+    private var frameObserver: Observer<com.rlsideswipe.access.ai.FrameResult?>? = null
+    private var trajObserver: Observer<List<com.rlsideswipe.access.ai.TrajectoryPoint>?>? = null
+    
     private fun observeScreenCaptureData() {
-        try {
-            // Don't try to bind to ScreenCaptureService to avoid crashes
-            // The accessibility service will work independently for now
-            Log.d(TAG, "Accessibility service running independently - no binding to ScreenCaptureService")
-            
-            // Just keep the service alive and stable
-            // Future versions can add the binding back when ScreenCaptureService is more stable
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in observeScreenCaptureData", e)
+        val svc = screenCaptureService ?: return
+        if (frameObserver == null) {
+            frameObserver = Observer { fr -> overlayView?.setDetection(fr?.ball) }
+            svc.frameResults.observeForever(frameObserver!!)
+        }
+        if (trajObserver == null) {
+            trajObserver = Observer { pts -> pts?.let { overlayView?.setTrajectory(it) } }
+            svc.trajectoryPoints.observeForever(trajObserver!!)
         }
     }
     
@@ -147,7 +152,8 @@ class MainAccessibilityService : AccessibilityService() {
                 if (!isOverlayAdded) {
                     Log.i(TAG, "🔄 Attempting to restore overlay after interruption")
                     setupOverlay()
-                    observeScreenCaptureData()
+                    val intent = Intent(this, ScreenCaptureService::class.java)
+                    bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
                 } else {
                     Log.d(TAG, "✅ Overlay still active after interruption")
                 }
@@ -174,8 +180,12 @@ class MainAccessibilityService : AccessibilityService() {
             Log.e(TAG, "Error removing overlay during destroy", e)
         }
         
-        // Clean up service connection
+        // Clean up observers and service connection
         try {
+            frameObserver?.let { screenCaptureService?.frameResults?.removeObserver(it) }
+            trajObserver?.let { screenCaptureService?.trajectoryPoints?.removeObserver(it) }
+            frameObserver = null
+            trajObserver = null
             if (isServiceBound) {
                 unbindService(serviceConnection)
                 isServiceBound = false

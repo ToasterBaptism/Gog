@@ -33,6 +33,7 @@ import com.rlsideswipe.access.ai.FrameResult
 import com.rlsideswipe.access.ai.InferenceEngine
 import com.rlsideswipe.access.ai.StubInferenceEngine
 import com.rlsideswipe.access.ai.TrajectoryPredictor
+import com.rlsideswipe.access.ai.TrajectoryPoint
 import com.rlsideswipe.access.ai.KalmanTrajectoryPredictor
 import com.rlsideswipe.access.util.BitmapUtils
 import com.rlsideswipe.access.util.BallTemplateManager
@@ -142,7 +143,12 @@ class ScreenCaptureService : Service() {
                 return START_STICKY
             }
             
-            val captureIntent = intent?.getParcelableExtra<Intent>("captureIntent")
+            val captureIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent?.getParcelableExtra("captureIntent", Intent::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent?.getParcelableExtra<Intent>("captureIntent")
+            }
             if (captureIntent != null) {
                 Log.d(TAG, "Starting screen capture with intent")
                 // Start capture on background thread to prevent blocking
@@ -244,9 +250,8 @@ class ScreenCaptureService : Service() {
             // Ensure overlay is started or updated with correct screen info
             if (predictionOverlayService == null) {
                 startPredictionOverlay()
-            } else {
-                PredictionOverlayService.updateScreenInfo(screenWidth, screenHeight, isLandscapeMode)
             }
+            // Screen info updates now flow via LiveData observers
             
             // Use RGBA_8888 for stability (avoid complex YUV conversion crashes)
             val format = PixelFormat.RGBA_8888
@@ -660,7 +665,9 @@ class ScreenCaptureService : Service() {
                                     conf = confidence
                                 )
                                 
-                                updatePredictionOverlay(predictions)
+                                // Update trajectory via LiveData
+                                val trajectoryPts = predictions.map { TrajectoryPoint(it.x, it.y, it.time.toLong()) }
+                                trajectoryPoints.postValue(trajectoryPts)
                                 updateNotificationWithBallDetection(ballDetection)
                                 
                                 return FrameResult(ballDetection, System.nanoTime())
@@ -678,7 +685,8 @@ class ScreenCaptureService : Service() {
                         conf = confidence
                     )
                     
-                    updatePredictionOverlay(listOf(PredictionPoint(bestX, bestY, 0f)))
+                    // Update trajectory via LiveData
+                    trajectoryPoints.postValue(listOf(TrajectoryPoint(bestX, bestY, 0L)))
                     updateNotificationWithBallDetection(ballDetection)
                     
                     return FrameResult(ballDetection, System.nanoTime())
@@ -1015,7 +1023,12 @@ class ScreenCaptureService : Service() {
             addAction("com.rlsideswipe.access.CAPTURE_TEMPLATE")
             addAction("com.rlsideswipe.access.ENABLE_MANUAL_POSITIONING")
         }
-        registerReceiver(templateCaptureReceiver, filter)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(templateCaptureReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(templateCaptureReceiver, filter)
+        }
         Log.d(TAG, "📸 Template capture and manual positioning receiver registered")
     }
     
@@ -1708,24 +1721,27 @@ class ScreenCaptureService : Service() {
     private fun startPredictionOverlay() {
         try {
             predictionOverlayService = Intent(this, PredictionOverlayService::class.java)
-            startService(predictionOverlayService)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(predictionOverlayService)
+            } else {
+                startService(predictionOverlayService)
+            }
             
             // Wait a moment for service to initialize
             Handler(Looper.getMainLooper()).postDelayed({
-                // Pass screen info to overlay service for coordinate transformation
-                Log.d(TAG, "📡 Passing screen info to overlay: ${screenWidth}x${screenHeight}, landscape: $isLandscapeMode")
-                PredictionOverlayService.updateScreenInfo(screenWidth, screenHeight, isLandscapeMode)
+                // Screen info and overlay updates now flow via LiveData observers
+                Log.d(TAG, "📡 Overlay service started, updates will flow via LiveData: ${screenWidth}x${screenHeight}, landscape: $isLandscapeMode")
                 
                 val isTflite = try { com.rlsideswipe.access.BuildConfig.FLAVOR?.contains("tflite") == true } catch (e: Exception) { false }
                 if (!isTflite) {
-                    // Send immediate test points to verify overlay is working (non-tflite builds)
-                    val testPoints = listOf(
-                        PredictionOverlayService.PredictionPoint(screenWidth * 0.1f, screenHeight * 0.1f, 0f),
-                        PredictionOverlayService.PredictionPoint(screenWidth * 0.5f, screenHeight * 0.5f, 1f),
-                        PredictionOverlayService.PredictionPoint(screenWidth * 0.9f, screenHeight * 0.9f, 2f)
+                    // Send initial test trajectory points via LiveData for non-tflite builds
+                    val testTrajectory = listOf(
+                        TrajectoryPoint(screenWidth * 0.1f, screenHeight * 0.1f, 0L),
+                        TrajectoryPoint(screenWidth * 0.5f, screenHeight * 0.5f, 1000L),
+                        TrajectoryPoint(screenWidth * 0.9f, screenHeight * 0.9f, 2000L)
                     )
-                    Log.d(TAG, "🧪 STARTUP: Sending initial test points to verify overlay")
-                    // Overlay updates flow via LiveData observers
+                    Log.d(TAG, "🧪 STARTUP: Publishing initial test trajectory via LiveData")
+                    trajectoryPoints.postValue(testTrajectory)
                 } else {
                     Log.d(TAG, "🧪 STARTUP: tflite build - skipping initial debug test points")
                 }
@@ -1749,19 +1765,7 @@ class ScreenCaptureService : Service() {
         }
     }
     
-    private fun updatePredictionOverlay(predictions: List<PredictionPoint>) {
-        try {
-            // Convert to overlay service format
-            val overlayPredictions = predictions.map { 
-                PredictionOverlayService.PredictionPoint(it.x, it.y, it.time) 
-            }
-            
-            // Use LiveData pipeline instead of direct service calls
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Error updating prediction overlay", e)
-        }
-    }
+    // updatePredictionOverlay method removed - updates now flow via LiveData observers
     
     private fun updateNotificationWithBallDetection(ball: Detection?) {
         ball?.let {
