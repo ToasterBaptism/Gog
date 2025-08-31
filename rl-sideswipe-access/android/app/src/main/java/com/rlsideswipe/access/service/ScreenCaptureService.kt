@@ -390,10 +390,20 @@ class ScreenCaptureService : Service() {
                 Log.d(TAG, "🤖 Using inference engine: ${inferenceEngine?.javaClass?.simpleName}")
                 var ballDetection = inferenceEngine?.infer(bitmap)
                 
-                // If inference engine returns null (like StubInferenceEngine), use template matching fallback
+                Log.d(TAG, "🔍 Inference result: ballDetection=$ballDetection, ball=${ballDetection?.ball}")
+                
+                // If inference engine returns null or ball is null (like StubInferenceEngine), use template matching fallback
                 if (ballDetection?.ball == null) {
-                    Log.d(TAG, "🔄 Inference engine returned null, using template matching fallback")
+                    Log.d(TAG, "🔄 Inference engine returned null ball, using template matching fallback")
                     ballDetection = detectBallSimple(bitmap)
+                    Log.d(TAG, "🎯 Template matching result: ballDetection=$ballDetection, ball=${ballDetection?.ball}")
+                }
+                
+                // If still no detection, try more aggressive detection methods
+                if (ballDetection?.ball == null) {
+                    Log.d(TAG, "🚨 No ball detected by template matching, trying aggressive detection")
+                    ballDetection = detectBallAggressive(bitmap)
+                    Log.d(TAG, "💪 Aggressive detection result: ballDetection=$ballDetection, ball=${ballDetection?.ball}")
                 }
                 
                 // Update statistics
@@ -681,6 +691,274 @@ class ScreenCaptureService : Service() {
                 lastDetectionTime = System.currentTimeMillis()
             }
         }
+    }
+    
+    // Aggressive ball detection method - tries multiple approaches
+    private fun detectBallAggressive(bitmap: Bitmap): FrameResult? {
+        return try {
+            Log.d(TAG, "🚨 Starting aggressive ball detection")
+            val width = bitmap.width
+            val height = bitmap.height
+            
+            // Method 1: Look for dark circular objects (like the ball in the screenshot)
+            val darkBalls = detectDarkCircularObjects(bitmap)
+            if (darkBalls.isNotEmpty()) {
+                val bestDark = darkBalls.first()
+                Log.d(TAG, "🎯 Found dark ball at (${bestDark.x}, ${bestDark.y})")
+                return FrameResult(
+                    Detection(
+                        cx = bestDark.x / width,
+                        cy = bestDark.y / height,
+                        r = bestDark.radius / width,
+                        conf = bestDark.confidence
+                    ),
+                    System.nanoTime()
+                )
+            }
+            
+            // Method 2: Look for any circular objects with strong edges
+            val edgeBalls = detectCircularObjectsByEdges(bitmap)
+            if (edgeBalls.isNotEmpty()) {
+                val bestEdge = edgeBalls.first()
+                Log.d(TAG, "🎯 Found edge ball at (${bestEdge.x}, ${bestEdge.y})")
+                return FrameResult(
+                    Detection(
+                        cx = bestEdge.x / width,
+                        cy = bestEdge.y / height,
+                        r = bestEdge.radius / width,
+                        conf = bestEdge.confidence
+                    ),
+                    System.nanoTime()
+                )
+            }
+            
+            // Method 3: Simple blob detection for any round object
+            val blobs = detectRoundBlobs(bitmap)
+            if (blobs.isNotEmpty()) {
+                val bestBlob = blobs.first()
+                Log.d(TAG, "🎯 Found blob ball at (${bestBlob.x}, ${bestBlob.y})")
+                return FrameResult(
+                    Detection(
+                        cx = bestBlob.x / width,
+                        cy = bestBlob.y / height,
+                        r = bestBlob.radius / width,
+                        conf = bestBlob.confidence
+                    ),
+                    System.nanoTime()
+                )
+            }
+            
+            Log.d(TAG, "🚨 Aggressive detection found no balls")
+            null
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Aggressive ball detection failed", e)
+            null
+        }
+    }
+    
+    // Detect dark circular objects (like the ball in the screenshot)
+    private fun detectDarkCircularObjects(bitmap: Bitmap): List<CircleCandidate> {
+        val candidates = mutableListOf<CircleCandidate>()
+        val width = bitmap.width
+        val height = bitmap.height
+        
+        // Focus on center area where ball is likely to be
+        val startX = (width * 0.2).toInt()
+        val endX = (width * 0.8).toInt()
+        val startY = (height * 0.3).toInt() // Focus on lower area where ball typically is
+        val endY = (height * 0.9).toInt()
+        
+        val step = 8 // Sample every 8 pixels for performance
+        
+        for (y in startY until endY step step) {
+            for (x in startX until endX step step) {
+                val pixel = bitmap.getPixel(x, y)
+                val brightness = getBrightness(pixel)
+                
+                // Look for dark pixels (ball appears dark in the screenshot)
+                if (brightness < 0.4f) {
+                    // Check if this could be center of a circular dark object
+                    val radius = findDarkCircleRadius(bitmap, x, y, maxRadius = 80)
+                    if (radius > 15) { // Minimum reasonable ball size
+                        val confidence = calculateDarkCircleConfidence(bitmap, x, y, radius)
+                        if (confidence > 0.3f) {
+                            candidates.add(CircleCandidate(x.toFloat(), y.toFloat(), radius, confidence, 0f))
+                        }
+                    }
+                }
+            }
+        }
+        
+        return candidates.sortedByDescending { it.confidence }
+    }
+    
+    // Find radius of dark circular object
+    private fun findDarkCircleRadius(bitmap: Bitmap, centerX: Int, centerY: Int, maxRadius: Int): Float {
+        var bestRadius = 0f
+        val width = bitmap.width
+        val height = bitmap.height
+        
+        for (r in 10..maxRadius step 5) {
+            var darkPixels = 0
+            var totalPixels = 0
+            
+            // Sample points around the circle
+            for (angle in 0 until 360 step 30) {
+                val radians = Math.toRadians(angle.toDouble())
+                val x = (centerX + r * cos(radians)).toInt()
+                val y = (centerY + r * sin(radians)).toInt()
+                
+                if (x in 0 until width && y in 0 until height) {
+                    val brightness = getBrightness(bitmap.getPixel(x, y))
+                    if (brightness < 0.5f) darkPixels++
+                    totalPixels++
+                }
+            }
+            
+            val darkRatio = if (totalPixels > 0) darkPixels.toFloat() / totalPixels else 0f
+            if (darkRatio > 0.6f) { // At least 60% of circle perimeter is dark
+                bestRadius = r.toFloat()
+            } else if (bestRadius > 0) {
+                break // Found the edge of the dark circle
+            }
+        }
+        
+        return bestRadius
+    }
+    
+    // Calculate confidence for dark circle detection
+    private fun calculateDarkCircleConfidence(bitmap: Bitmap, centerX: Int, centerY: Int, radius: Float): Float {
+        val width = bitmap.width
+        val height = bitmap.height
+        var darkPixels = 0
+        var totalPixels = 0
+        
+        // Check interior of circle
+        val r = radius.toInt()
+        for (dy in -r..r) {
+            for (dx in -r..r) {
+                val distance = sqrt((dx * dx + dy * dy).toFloat())
+                if (distance <= radius) {
+                    val x = centerX + dx
+                    val y = centerY + dy
+                    if (x in 0 until width && y in 0 until height) {
+                        val brightness = getBrightness(bitmap.getPixel(x, y))
+                        if (brightness < 0.5f) darkPixels++
+                        totalPixels++
+                    }
+                }
+            }
+        }
+        
+        return if (totalPixels > 0) darkPixels.toFloat() / totalPixels else 0f
+    }
+    
+    // Detect circular objects by edge detection
+    private fun detectCircularObjectsByEdges(bitmap: Bitmap): List<CircleCandidate> {
+        // This is a simplified version - in a real implementation you'd use Hough Circle Transform
+        val candidates = mutableListOf<CircleCandidate>()
+        val width = bitmap.width
+        val height = bitmap.height
+        
+        // Focus on center-bottom area
+        val startX = (width * 0.3).toInt()
+        val endX = (width * 0.7).toInt()
+        val startY = (height * 0.4).toInt()
+        val endY = (height * 0.8).toInt()
+        
+        val step = 12
+        
+        for (y in startY until endY step step) {
+            for (x in startX until endX step step) {
+                val edgeStrength = calculateEdgeStrength(bitmap, x, y, 30) // Use 30 pixel radius for edge detection
+                if (edgeStrength > 0.3f) {
+                    // Look for circular pattern around this edge point
+                    val radius = findCircularPattern(bitmap, x, y)
+                    if (radius > 20) {
+                        candidates.add(CircleCandidate(x.toFloat(), y.toFloat(), radius, edgeStrength, edgeStrength))
+                    }
+                }
+            }
+        }
+        
+        return candidates.sortedByDescending { it.confidence }
+    }
+    
+    // Simple blob detection for round objects
+    private fun detectRoundBlobs(bitmap: Bitmap): List<CircleCandidate> {
+        val candidates = mutableListOf<CircleCandidate>()
+        val width = bitmap.width
+        val height = bitmap.height
+        
+        // Look for any distinct objects in the center area
+        val centerX = width / 2
+        val centerY = (height * 0.6).toInt() // Focus on lower center where ball typically is
+        val searchRadius = minOf(width, height) / 4
+        
+        // Simple approach: look for pixels that are significantly different from background
+        val backgroundBrightness = getBrightness(bitmap.getPixel(centerX, height - 50)) // Sample from bottom
+        
+        for (r in 20..80 step 10) {
+            var distinctPixels = 0
+            var totalPixels = 0
+            
+            for (angle in 0 until 360 step 20) {
+                val radians = Math.toRadians(angle.toDouble())
+                val x = (centerX + r * cos(radians)).toInt()
+                val y = (centerY + r * sin(radians)).toInt()
+                
+                if (x in 0 until width && y in 0 until height) {
+                    val brightness = getBrightness(bitmap.getPixel(x, y))
+                    val diff = abs(brightness - backgroundBrightness)
+                    if (diff > 0.2f) distinctPixels++
+                    totalPixels++
+                }
+            }
+            
+            val distinctRatio = if (totalPixels > 0) distinctPixels.toFloat() / totalPixels else 0f
+            if (distinctRatio > 0.5f) {
+                candidates.add(CircleCandidate(centerX.toFloat(), centerY.toFloat(), r.toFloat(), distinctRatio, 0f))
+            }
+        }
+        
+        return candidates.sortedByDescending { it.confidence }
+    }
+    
+    // Find circular pattern around a point
+    private fun findCircularPattern(bitmap: Bitmap, centerX: Int, centerY: Int): Float {
+        val width = bitmap.width
+        val height = bitmap.height
+        
+        for (r in 15..60 step 5) {
+            var edgePoints = 0
+            var totalPoints = 0
+            
+            for (angle in 0 until 360 step 30) {
+                val radians = Math.toRadians(angle.toDouble())
+                val x = (centerX + r * cos(radians)).toInt()
+                val y = (centerY + r * sin(radians)).toInt()
+                
+                if (x in 1 until width-1 && y in 1 until height-1) {
+                    val edgeStrength = calculateEdgeStrength(bitmap, x, y, 10) // Use 10 pixel radius for pattern detection
+                    if (edgeStrength > 0.2f) edgePoints++
+                    totalPoints++
+                }
+            }
+            
+            val edgeRatio = if (totalPoints > 0) edgePoints.toFloat() / totalPoints else 0f
+            if (edgeRatio > 0.4f) return r.toFloat()
+        }
+        
+        return 0f
+    }
+    
+    // Get brightness of a pixel
+    private fun getBrightness(pixel: Int): Float {
+        val r = (pixel shr 16) and 0xFF
+        val g = (pixel shr 8) and 0xFF
+        val b = pixel and 0xFF
+        return (r + g + b) / (3 * 255f)
     }
     
     // Data class for detected circular objects

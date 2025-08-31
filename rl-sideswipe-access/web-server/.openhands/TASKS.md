@@ -1,11 +1,13 @@
 # Task List
 
-1. ✅ Update app version to 2.22
+1. ✅ Investigate ball detection and projection issues
 
-2. ✅ Build APK with all latest fixes
+2. ✅ Fix stub inference engine to use template matching fallback
 
-3. ✅ Set up web server to host the APK
+3. ✅ Add UI indicators/buttons for easier manual mode switching
 
-4. ✅ Verify APK deployment and accessibility
+4. ✅ Build new stub-only APK (no TensorFlow Lite)
+
+5. ✅ Test ball acquisition and projection functionality
 
 
