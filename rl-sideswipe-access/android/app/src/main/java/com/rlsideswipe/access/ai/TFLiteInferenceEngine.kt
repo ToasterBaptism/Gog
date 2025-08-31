@@ -510,21 +510,22 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
                             val r = (p ushr 16) and 0xFF
                             val g = (p ushr 8) and 0xFF
                             val b = p and 0xFF
-                            val gray = ((0.299f * r) + (0.587f * g) + (0.114f * b)).toInt().coerceIn(0, 255)
-                            val q = ((gray - zero) * scale).coerceIn(0f, 255f)
-                            buffer.put(q.toInt().coerceIn(0,255).toByte())
+                            val gray = ((0.299f * r) + (0.587f * g) + (0.114f * b)).coerceIn(0f, 255f)
+                            val real = gray / 255f
+                            val q = ((real / scale) + zero).roundToInt().coerceIn(0, 255)
+                            buffer.put(q.toByte())
                         }
                     } else {
                         for (p in pixels) {
                             val r = (p ushr 16) and 0xFF
                             val g = (p ushr 8) and 0xFF
                             val b = p and 0xFF
-                            val rq = ((r - zero) * scale).coerceIn(0f,255f).toInt()
-                            val gq = ((g - zero) * scale).coerceIn(0f,255f).toInt()
-                            val bq = ((b - zero) * scale).coerceIn(0f,255f).toInt()
-                            buffer.put(rq.coerceIn(0,255).toByte())
-                            buffer.put(gq.coerceIn(0,255).toByte())
-                            buffer.put(bq.coerceIn(0,255).toByte())
+                            val rq = (((r / 255f) / scale) + zero).roundToInt().coerceIn(0, 255)
+                            val gq = (((g / 255f) / scale) + zero).roundToInt().coerceIn(0, 255)
+                            val bq = (((b / 255f) / scale) + zero).roundToInt().coerceIn(0, 255)
+                            buffer.put(rq.toByte())
+                            buffer.put(gq.toByte())
+                            buffer.put(bq.toByte())
                         }
                     }
                 }
@@ -536,8 +537,8 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
                             val r = (p ushr 16) and 0xFF
                             val g = (p ushr 8) and 0xFF
                             val b = p and 0xFF
-                            val gray = ((0.299f * r) + (0.587f * g) + (0.114f * b)).toInt().coerceIn(0, 255)
-                            val q = (((gray - zero) * scale).roundToInt()).coerceIn(-128, 127)
+                            val real = ((0.299f * r) + (0.587f * g) + (0.114f * b)) / 255f
+                            val q = ((real / scale) + zero).roundToInt().coerceIn(-128, 127)
                             buffer.put(q.toByte())
                         }
                     } else {
@@ -545,9 +546,9 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
                             val r = (p ushr 16) and 0xFF
                             val g = (p ushr 8) and 0xFF
                             val b = p and 0xFF
-                            val rq = (((r - zero) * scale).roundToInt()).coerceIn(-128, 127)
-                            val gq = (((g - zero) * scale).roundToInt()).coerceIn(-128, 127)
-                            val bq = (((b - zero) * scale).roundToInt()).coerceIn(-128, 127)
+                            val rq = (((r / 255f) / scale) + zero).roundToInt().coerceIn(-128, 127)
+                            val gq = (((g / 255f) / scale) + zero).roundToInt().coerceIn(-128, 127)
+                            val bq = (((b / 255f) / scale) + zero).roundToInt().coerceIn(-128, 127)
                             buffer.put(rq.toByte())
                             buffer.put(gq.toByte())
                             buffer.put(bq.toByte())
@@ -621,6 +622,19 @@ class TFLiteInferenceEngine(private val context: Context) : InferenceEngine {
                         w = out.float
                         h = out.float
                         conf = out.float
+                        // If outputs don't look normalized, interpret as absolute in input-space
+                        val maxCoord = max(inputWidth, inputHeight).toFloat().coerceAtLeast(1f)
+                        val looksNormalized = (x in 0f..1.5f) && (y in 0f..1.5f) && (w >= 0f && w <= 2f) && (h >= 0f && h <= 2f)
+                        if (!looksNormalized) {
+                            x /= inputWidth.coerceAtLeast(1)
+                            y /= inputHeight.coerceAtLeast(1)
+                            w /= inputWidth.coerceAtLeast(1)
+                            h /= inputHeight.coerceAtLeast(1)
+                        }
+                        x = x.coerceIn(0f, 1f)
+                        y = y.coerceIn(0f, 1f)
+                        w = w.coerceAtLeast(0f)
+                        h = h.coerceAtLeast(0f)
                     }
                 }
             }
