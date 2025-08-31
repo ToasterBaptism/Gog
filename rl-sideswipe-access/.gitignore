@@ -39,6 +39,13 @@ node_modules/
 npm-debug.log
 yarn-error.log
 
+# Environment variables (prevent secrets leakage)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
 # BUCK
 buck-out/
 \.buckd/
