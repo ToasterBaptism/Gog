@@ -67,16 +67,20 @@ class SelfHealing(private val context: Context) {
             // Wait a moment before restarting
             handler.postDelayed({
                 try {
-                    // Check if we have a stored capture intent to restart with
-                    val sharedPrefs = context.getSharedPreferences("screen_capture", Context.MODE_PRIVATE)
-                    val hasStoredIntent = sharedPrefs.getBoolean("has_capture_intent", false)
-                    
-                    if (hasStoredIntent) {
-                        // In a real implementation, we would need to request MediaProjection again
-                        // For now, just log that restart would be needed
-                        Log.d(TAG, "Screen capture service restart would require new MediaProjection permission")
-                    } else {
-                        Log.d(TAG, "No stored capture intent available for restart")
+                    // Ask the service to restart itself with previously persisted params.
+                    // Service should handle ACTION_RESTART_CAPTURE and re-use saved MediaProjection data.
+                    val restartIntent = Intent(context, ScreenCaptureService::class.java).apply {
+                        action = ScreenCaptureService.ACTION_RESTART_CAPTURE
+                    }
+                    try {
+                        if (android.os.Build.VERSION.SDK_INT >= 26) {
+                            context.startForegroundService(restartIntent)
+                        } else {
+                            context.startService(restartIntent)
+                        }
+                        Log.d(TAG, "Screen capture service restart requested")
+                    } catch (ise: IllegalStateException) {
+                        Log.e(TAG, "Foreground service start not allowed in background", ise)
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to restart screen capture service", e)

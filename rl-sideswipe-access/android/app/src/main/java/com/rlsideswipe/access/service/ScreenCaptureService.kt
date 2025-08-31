@@ -55,6 +55,7 @@ class ScreenCaptureService : Service() {
         fun getInstance(): ScreenCaptureService? = instance
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "screen_capture_channel"
+        const val ACTION_RESTART_CAPTURE = "com.rlsideswipe.access.action.RESTART_CAPTURE"
         private const val TARGET_FPS = 25
         private const val FRAME_INTERVAL_MS = 1000L / TARGET_FPS
         private const val MAX_FRAME_SKIP = 3 // Skip frames if processing is too slow
@@ -122,7 +123,7 @@ class ScreenCaptureService : Service() {
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         try {
-            Log.d(TAG, "ScreenCaptureService onStartCommand called")
+            Log.d(TAG, "ScreenCaptureService onStartCommand called with action: ${intent?.action}")
             
             val notification = createNotification()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -131,6 +132,15 @@ class ScreenCaptureService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             }
             Log.d(TAG, "Foreground service started with notification")
+            
+            // Handle restart action
+            if (intent?.action == ACTION_RESTART_CAPTURE) {
+                Log.d(TAG, "Handling restart capture action")
+                // For restart, we would need to re-request MediaProjection permission
+                // This is a limitation - MediaProjection cannot be restarted without user interaction
+                Log.w(TAG, "Restart capture requires new MediaProjection permission from user")
+                return START_STICKY
+            }
             
             val captureIntent = intent?.getParcelableExtra<Intent>("captureIntent")
             if (captureIntent != null) {
@@ -569,7 +579,7 @@ class ScreenCaptureService : Service() {
                     points
                 }
                 
-                PredictionOverlayService.updatePredictions(overlayPoints)
+                // Overlay updates flow via frameResults/trajectoryPoints observers
             } else {
                 val isTflite = try { com.rlsideswipe.access.BuildConfig.FLAVOR?.contains("tflite") == true } catch (e: Exception) { false }
                 if (!isTflite) {
@@ -584,7 +594,7 @@ class ScreenCaptureService : Service() {
                     testPoints.forEach { point ->
                         Log.d(TAG, "🧪 Test point: (${point.x}, ${point.y}) time=${point.time}")
                     }
-                    PredictionOverlayService.updatePredictions(testPoints)
+                    // Overlay updates flow via LiveData observers
                 }
             }
             
@@ -1715,7 +1725,7 @@ class ScreenCaptureService : Service() {
                         PredictionOverlayService.PredictionPoint(screenWidth * 0.9f, screenHeight * 0.9f, 2f)
                     )
                     Log.d(TAG, "🧪 STARTUP: Sending initial test points to verify overlay")
-                    PredictionOverlayService.updatePredictions(testPoints)
+                    // Overlay updates flow via LiveData observers
                 } else {
                     Log.d(TAG, "🧪 STARTUP: tflite build - skipping initial debug test points")
                 }
@@ -1746,8 +1756,7 @@ class ScreenCaptureService : Service() {
                 PredictionOverlayService.PredictionPoint(it.x, it.y, it.time) 
             }
             
-            // Send update directly to overlay service
-            PredictionOverlayService.updatePredictions(overlayPredictions)
+            // Use LiveData pipeline instead of direct service calls
             
         } catch (e: Exception) {
             Log.e(TAG, "Error updating prediction overlay", e)

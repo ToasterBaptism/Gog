@@ -58,13 +58,7 @@ class MainAccessibilityService : AccessibilityService() {
         
         instance = this
         
-        // Check if we have overlay permission
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            if (!android.provider.Settings.canDrawOverlays(this)) {
-                Log.e(TAG, "🚨 OVERLAY PERMISSION DENIED - Service cannot function!")
-                return
-            }
-        }
+        // TYPE_ACCESSIBILITY_OVERLAY does not require SYSTEM_ALERT_WINDOW; no overlay settings check needed here
         
         // Delay overlay setup to ensure service is fully initialized
         mainHandler.postDelayed({
