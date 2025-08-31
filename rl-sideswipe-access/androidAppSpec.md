@@ -82,6 +82,30 @@
 - **Input Size**: 320×320 RGB
 - **SHA256**: [To be calculated during build]
 
+## APK Verification
+
+### Generate SHA-256 Checksum
+To verify APK integrity, generate and compare SHA-256 checksums:
+
+```bash
+# Linux/macOS
+sha256sum RL-Sideswipe-Access-v*.apk
+
+# macOS alternative
+shasum -a 256 RL-Sideswipe-Access-v*.apk
+
+# Expected output format:
+# a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456  RL-Sideswipe-Access-v2.25-stub-release.apk
+```
+
+### Verify Model File Integrity
+```bash
+# Verify TensorFlow Lite model checksum
+sha256sum android/app/src/tflite/assets/rl_sideswipe_ball_v1.tflite
+
+# Expected: [To be updated with actual checksum]
+```
+
 ## Validation Matrix Status
 
 ### Functional Tests

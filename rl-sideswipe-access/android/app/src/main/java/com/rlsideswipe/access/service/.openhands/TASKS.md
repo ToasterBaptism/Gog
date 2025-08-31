@@ -1,7 +1,7 @@
 # Task List
 
 1. ✅ Check web server is serving correct APK
-Web server is correctly serving the new APK with different MD5
+Web server is correctly serving the new APK with different SHA-256
 2. ✅ Fix button positioning and touch detection
 Added comprehensive logging and fixed view touch capabilities
 3. ✅ Fix manual ball position dragging
