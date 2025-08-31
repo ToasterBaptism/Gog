@@ -54,18 +54,36 @@ class MainAccessibilityService : AccessibilityService() {
     
     override fun onServiceConnected() {
         super.onServiceConnected()
-        Log.i(TAG, "Accessibility service connected - setting up overlay")
+        Log.i(TAG, "🔌 Accessibility service connected - setting up overlay")
         
         instance = this
+        
+        // Check if we have overlay permission
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            if (!android.provider.Settings.canDrawOverlays(this)) {
+                Log.e(TAG, "🚨 OVERLAY PERMISSION DENIED - Service cannot function!")
+                return
+            }
+        }
         
         // Delay overlay setup to ensure service is fully initialized
         mainHandler.postDelayed({
             try {
                 setupOverlay()
                 observeScreenCaptureData()
-                Log.i(TAG, "Accessibility service setup completed successfully")
+                Log.i(TAG, "✅ Accessibility service setup completed successfully")
             } catch (e: Exception) {
-                Log.e(TAG, "Error during service setup", e)
+                Log.e(TAG, "🚨 Error during service setup", e)
+                // Try to recover after a delay
+                mainHandler.postDelayed({
+                    Log.i(TAG, "🔄 Attempting service recovery...")
+                    try {
+                        setupOverlay()
+                        observeScreenCaptureData()
+                    } catch (e2: Exception) {
+                        Log.e(TAG, "🚨 Service recovery failed", e2)
+                    }
+                }, 2000)
             }
         }, 500)
     }
@@ -127,13 +145,20 @@ class MainAccessibilityService : AccessibilityService() {
     }
     
     override fun onInterrupt() {
-        Log.w(TAG, "Accessibility service interrupted - attempting to recover")
+        Log.w(TAG, "⚠️ Accessibility service interrupted - attempting to recover")
         
         // Try to recover the overlay after interruption
         mainHandler.postDelayed({
-            if (!isOverlayAdded) {
-                Log.i(TAG, "Attempting to restore overlay after interruption")
-                setupOverlay()
+            try {
+                if (!isOverlayAdded) {
+                    Log.i(TAG, "🔄 Attempting to restore overlay after interruption")
+                    setupOverlay()
+                    observeScreenCaptureData()
+                } else {
+                    Log.d(TAG, "✅ Overlay still active after interruption")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "🚨 Failed to recover from interruption", e)
             }
         }, 1000)
     }

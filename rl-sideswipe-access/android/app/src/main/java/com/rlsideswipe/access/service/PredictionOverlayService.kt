@@ -99,6 +99,14 @@ class PredictionOverlayService : Service() {
     
     private fun createOverlay() {
         try {
+            // Check if we have overlay permission
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (!android.provider.Settings.canDrawOverlays(this)) {
+                    Log.e(TAG, "🚨 OVERLAY PERMISSION DENIED - Cannot create overlay!")
+                    return
+                }
+            }
+            
             windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
             overlayView = PredictionOverlayView(this)
             
@@ -545,10 +553,11 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
     }
     
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        val touchX = event.x
-        val touchY = event.y
-        
-        Log.d(TAG, "🖱️ TOUCH EVENT: action=${event.action} at ($touchX, $touchY) manual=$isManualMode dragging=$isDragging")
+        return try {
+            val touchX = event.x
+            val touchY = event.y
+            
+            Log.d(TAG, "🖱️ TOUCH EVENT: action=${event.action} at ($touchX, $touchY) manual=$isManualMode dragging=$isDragging")
         
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
@@ -624,8 +633,12 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
                     Log.d(TAG, "🖱️ ACTION_UP ignored - not dragging, manual=$isManualMode")
                 }
             }
+            }
+            super.onTouchEvent(event)
+        } catch (e: Exception) {
+            Log.e(TAG, "🚨 ERROR in onTouchEvent: ${e.message}", e)
+            false
         }
-        return super.onTouchEvent(event)
     }
     
     private fun startManualMode(touchX: Float, touchY: Float) {

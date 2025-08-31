@@ -1,13 +1,13 @@
 # Task List
 
-1. 🔄 Check web server is serving correct APK
-User reports web server still serving old APK
-2. ⏳ Fix Accept/Cancel/Exit button touch detection
-Buttons not responding to touch events
-3. ⏳ Fix manual ball position dragging
-Yellow square still not draggable, getting locked up
-4. ⏳ Fix pink square trajectory updates
-Pink square not moving or recognizing ball position
-5. ⏳ Test complete manual system end-to-end
-Verify all manual controls work properly
+1. ✅ Completely stop the current web server
+Web server stopped successfully
+2. 🔄 Clean rebuild APK from scratch
+Running clean build now
+3. ⏳ Verify correct APK is deployed to web server
+Check file sizes, checksums, and content
+4. ⏳ Investigate accessibility service turning off
+May need to check service stability and permissions
+5. ⏳ Verify manual controls work in new build
+Ensure buttons and dragging actually function
 
