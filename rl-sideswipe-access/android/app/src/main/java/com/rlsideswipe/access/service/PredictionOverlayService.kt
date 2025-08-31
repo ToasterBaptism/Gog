@@ -177,6 +177,14 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
     private var isDragging = false
     private val touchRadius = 100f // Touch detection radius around ball
     
+    // UI Control buttons
+    private var showControlButtons = false
+    private var acceptButtonRect = RectF()
+    private var cancelButtonRect = RectF()
+    private var exitButtonRect = RectF()
+    private val buttonSize = 120f
+    private val buttonMargin = 20f
+    
     // Screen info for coordinate transformations
     private var screenWidth = 0
     private var screenHeight = 0
@@ -428,66 +436,166 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
                 }
             }
             
+            // Draw control buttons when in manual mode
+            if (showControlButtons) {
+                drawControlButtons(canvas)
+            }
+            
         } catch (e: Exception) {
             Log.e(TAG, "Error drawing prediction overlay", e)
         }
     }
     
+    private fun drawControlButtons(canvas: Canvas) {
+        // Position buttons at bottom of screen
+        val bottomY = height - buttonMargin
+        val topY = bottomY - buttonSize
+        
+        // Accept button (green) - left
+        acceptButtonRect.set(
+            buttonMargin,
+            topY,
+            buttonMargin + buttonSize,
+            bottomY
+        )
+        
+        // Cancel button (red) - center
+        val centerX = width / 2f
+        cancelButtonRect.set(
+            centerX - buttonSize / 2f,
+            topY,
+            centerX + buttonSize / 2f,
+            bottomY
+        )
+        
+        // Exit button (gray) - right
+        exitButtonRect.set(
+            width - buttonMargin - buttonSize,
+            topY,
+            width - buttonMargin,
+            bottomY
+        )
+        
+        // Draw buttons with rounded corners
+        val cornerRadius = 20f
+        
+        // Accept button (green)
+        val acceptPaint = Paint().apply {
+            color = Color.parseColor("#4CAF50")
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+        canvas.drawRoundRect(acceptButtonRect, cornerRadius, cornerRadius, acceptPaint)
+        
+        // Cancel button (red)
+        val cancelPaint = Paint().apply {
+            color = Color.parseColor("#F44336")
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+        canvas.drawRoundRect(cancelButtonRect, cornerRadius, cornerRadius, cancelPaint)
+        
+        // Exit button (gray)
+        val exitPaint = Paint().apply {
+            color = Color.parseColor("#757575")
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+        canvas.drawRoundRect(exitButtonRect, cornerRadius, cornerRadius, exitPaint)
+        
+        // Draw button text
+        val textPaint = Paint().apply {
+            color = Color.WHITE
+            textSize = 32f
+            isAntiAlias = true
+            textAlign = Paint.Align.CENTER
+        }
+        
+        val textY = topY + buttonSize / 2f + 12f // Center vertically
+        
+        canvas.drawText("✓", acceptButtonRect.centerX(), textY, textPaint)
+        canvas.drawText("✗", cancelButtonRect.centerX(), textY, textPaint)
+        canvas.drawText("EXIT", exitButtonRect.centerX(), textY, textPaint)
+        
+        // Draw instruction text
+        val instructionPaint = Paint().apply {
+            color = Color.WHITE
+            textSize = 36f
+            isAntiAlias = true
+            textAlign = Paint.Align.CENTER
+            setShadowLayer(4f, 2f, 2f, Color.BLACK)
+        }
+        
+        val instructionY = topY - 60f
+        canvas.drawText("Drag yellow square to ball position", width / 2f, instructionY, instructionPaint)
+        canvas.drawText("✓ Accept & Learn  ✗ Cancel  EXIT Manual Mode", width / 2f, instructionY - 50f, instructionPaint)
+    }
+    
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        val touchX = event.x
+        val touchY = event.y
+        
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                val touchX = event.x
-                val touchY = event.y
-                
-                // Check if touching near current ball position or anywhere to start manual mode
-                val currentBallPos = if (predictions.isNotEmpty()) {
-                    val current = predictions.first()
-                    transformCoordinates(current.x, current.y)
-                } else {
-                    manualBallPosition ?: Pair(touchX, touchY)
+                // Check if touching control buttons first
+                if (showControlButtons) {
+                    when {
+                        acceptButtonRect.contains(touchX, touchY) -> {
+                            Log.d(TAG, "✅ Accept button pressed - capturing template and staying in manual mode")
+                            captureCurrentTemplate()
+                            return true
+                        }
+                        cancelButtonRect.contains(touchX, touchY) -> {
+                            Log.d(TAG, "❌ Cancel button pressed - reverting to auto mode")
+                            cancelManualMode()
+                            return true
+                        }
+                        exitButtonRect.contains(touchX, touchY) -> {
+                            Log.d(TAG, "🚪 Exit button pressed - completely exiting manual mode")
+                            exitManualMode()
+                            return true
+                        }
+                    }
                 }
                 
+                // If not in manual mode, start manual mode on any touch
+                if (!isManualMode) {
+                    startManualMode(touchX, touchY)
+                    return true
+                }
+                
+                // If in manual mode, check if touching near ball to start dragging
+                val ballPos = manualBallPosition ?: Pair(touchX, touchY)
                 val distance = kotlin.math.sqrt(
-                    (touchX - currentBallPos.first) * (touchX - currentBallPos.first) +
-                    (touchY - currentBallPos.second) * (touchY - currentBallPos.second)
+                    (touchX - ballPos.first) * (touchX - ballPos.first) +
+                    (touchY - ballPos.second) * (touchY - ballPos.second)
                 )
                 
-                if (distance <= touchRadius || manualBallPosition != null) {
+                if (distance <= touchRadius) {
                     isDragging = true
-                    isManualMode = true
-                    manualBallPosition = Pair(touchX, touchY)
-                    Log.d(TAG, "🖱️ Manual mode activated: Ball position set to ($touchX, $touchY)")
+                    showControlButtons = false // Hide buttons while dragging
+                    Log.d(TAG, "🖱️ Started dragging ball from ($touchX, $touchY)")
                     invalidate()
                     return true
                 }
             }
-            
+
             MotionEvent.ACTION_MOVE -> {
-                if (isDragging) {
-                    manualBallPosition = Pair(event.x, event.y)
-                    Log.d(TAG, "🖱️ Manual ball dragged to (${event.x}, ${event.y})")
+                if (isDragging && isManualMode) {
+                    manualBallPosition = Pair(touchX, touchY)
+                    Log.d(TAG, "🖱️ Ball dragged to ($touchX, $touchY)")
                     invalidate()
                     return true
                 }
             }
-            
+
             MotionEvent.ACTION_UP -> {
                 if (isDragging) {
                     isDragging = false
-                    val finalPos = manualBallPosition
-                    Log.d(TAG, "🖱️ Manual drag ended. Ball position: $finalPos")
-                    
-                    // Capture template at the final position
-                    if (finalPos != null) {
-                        // Convert overlay coordinates back to screen coordinates for template capture
-                        val screenX = finalPos.first * screenWidth / width
-                        val screenY = finalPos.second * screenHeight / height
-                        
-                        Log.d(TAG, "📸 Requesting template capture at screen coords ($screenX, $screenY)")
-                        PredictionOverlayService.requestTemplateCapture(screenX, screenY)
-                    }
-                    
-                    // Keep manual mode active until user double-taps to disable
+                    Log.d(TAG, "🖱️ Drag ended at (${manualBallPosition?.first}, ${manualBallPosition?.second})")
+                    // Show control buttons after positioning
+                    showControlButtons = true
+                    invalidate()
                     return true
                 }
             }
@@ -495,13 +603,50 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
         return super.onTouchEvent(event)
     }
     
-    // Method to disable manual mode (can be called from service)
-    fun disableManualMode() {
+    private fun startManualMode(touchX: Float, touchY: Float) {
+        isManualMode = true
+        manualBallPosition = Pair(touchX, touchY)
+        showControlButtons = true
+        Log.d(TAG, "🖱️ Manual mode started at ($touchX, $touchY)")
+        invalidate()
+    }
+    
+    private fun captureCurrentTemplate() {
+        val finalPos = manualBallPosition
+        if (finalPos != null) {
+            // Convert overlay coordinates back to screen coordinates for template capture
+            val screenX = finalPos.first * screenWidth / width
+            val screenY = finalPos.second * screenHeight / height
+            
+            Log.d(TAG, "📸 Capturing template at screen coords ($screenX, $screenY)")
+            PredictionOverlayService.requestTemplateCapture(screenX, screenY)
+            
+            // Hide buttons after capture but stay in manual mode
+            showControlButtons = false
+            invalidate()
+        }
+    }
+    
+    private fun cancelManualMode() {
+        // Return to auto detection mode but don't exit manual completely
+        showControlButtons = false
+        Log.d(TAG, "❌ Cancelled manual positioning - returning to auto detection")
+        invalidate()
+    }
+    
+    private fun exitManualMode() {
+        // Completely exit manual mode
         isManualMode = false
         manualBallPosition = null
         isDragging = false
-        Log.d(TAG, "🖱️ Manual mode disabled")
+        showControlButtons = false
+        Log.d(TAG, "🚪 Exited manual mode completely")
         invalidate()
+    }
+    
+    // Method to disable manual mode (can be called from service)
+    fun disableManualMode() {
+        exitManualMode()
     }
     
     // Method to check if in manual mode
