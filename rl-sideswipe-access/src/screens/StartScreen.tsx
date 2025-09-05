@@ -34,6 +34,15 @@ const StartScreen: React.FC = () => {
 
   const checkServiceStatus = useCallback(async () => {
     try {
+      console.log('StartScreen: Checking service status...');
+      
+      // Check if NativeControl module is available
+      if (!NativeControl) {
+        console.error('NativeControl module is not available');
+        setStatusText('Native module not available');
+        return;
+      }
+      
       const enabled = await NativeControl.isServiceEnabled();
       const actuallyRunning =
         await NativeControl.isAccessibilityServiceActuallyRunning();
@@ -71,12 +80,21 @@ const StartScreen: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to check service status:', error);
-      setStatusText('Service inactive');
+      setStatusText(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setServiceEnabled(false);
+      setPermissionsGranted(false);
+      setIsActive(false);
     }
   }, [isActive]);
 
   useEffect(() => {
-    checkServiceStatus();
+    try {
+      console.log('StartScreen: Component mounted, checking service status...');
+      checkServiceStatus();
+    } catch (error) {
+      console.error('Error in useEffect:', error);
+      setStatusText('Initialization error');
+    }
 
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active') {

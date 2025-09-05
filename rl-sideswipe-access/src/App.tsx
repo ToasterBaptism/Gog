@@ -1,20 +1,16 @@
 import React from 'react';
-import {
-  SafeAreaView,
-  StatusBar,
-  StyleSheet,
-} from 'react-native';
+import { SafeAreaView, StatusBar, StyleSheet } from 'react-native';
 import StartScreen from './screens/StartScreen';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const App: React.FC = () => {
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar
-        barStyle="dark-content"
-        backgroundColor="#f5f5f5"
-      />
-      <StartScreen />
-    </SafeAreaView>
+    <ErrorBoundary>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#f5f5f5" />
+        <StartScreen />
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 };
 
