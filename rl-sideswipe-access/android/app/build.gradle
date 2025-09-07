@@ -134,7 +134,6 @@ dependencies {
 
     // Manual React Native module dependencies - autolinking disabled
     implementation project(':react-native-permissions')
-    implementation project(':react-native-vector-icons')
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
