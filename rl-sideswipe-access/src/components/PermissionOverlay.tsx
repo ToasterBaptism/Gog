@@ -74,22 +74,22 @@ const PermissionOverlay: React.FC<PermissionOverlayProps> = ({
     return permissionStatus[key] ? '✅' : '❌';
   };
 
-  const isAccessibilityEnabled = permissionStatus['ACCESSIBILITY_SERVICE'] || false;
-  const isOverlayEnabled = permissionStatus['SYSTEM_ALERT_WINDOW'] || false;
-  const isBatteryOptimized = permissionStatus['BATTERY_OPTIMIZATION_IGNORED'] || false;
+  const isAccessibilityEnabled = permissionStatus.ACCESSIBILITY_SERVICE || false;
+  const isOverlayEnabled = permissionStatus.SYSTEM_ALERT_WINDOW || false;
+  const isBatteryOptimized = permissionStatus.BATTERY_OPTIMIZATION_IGNORED || false;
   // Only check runtime permissions that actually need to be requested
   const hasRuntimePermissions = permissionStatus['android.permission.RECORD_AUDIO'] || false;
-  
+
   // Check install-time permissions (these should always be true if app is installed)
   const hasInstallTimePermissions = [
     'android.permission.VIBRATE',
     'android.permission.WAKE_LOCK',
-    'android.permission.FOREGROUND_SERVICE'
+    'android.permission.FOREGROUND_SERVICE',
   ].every(perm => permissionStatus[perm]);
-  
+
   // Check notification permission for Android 13+
   const hasNotificationPermission = permissionStatus['android.permission.POST_NOTIFICATIONS'] !== false;
-  
+
   const hasBasicPermissions = hasRuntimePermissions && hasInstallTimePermissions && hasNotificationPermission;
 
   const allPermissionsGranted = isAccessibilityEnabled && isOverlayEnabled && isBatteryOptimized && hasBasicPermissions;

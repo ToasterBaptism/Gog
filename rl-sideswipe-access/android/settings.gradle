@@ -5,6 +5,3 @@ includeBuild('../node_modules/@react-native/gradle-plugin')
 // Manual module includes - autolinking disabled
 include ':react-native-permissions'
 project(':react-native-permissions').projectDir = new File(rootProject.projectDir, '../node_modules/react-native-permissions/android')
-
-include ':react-native-vector-icons'
-project(':react-native-vector-icons').projectDir = new File(rootProject.projectDir, '../node_modules/react-native-vector-icons/android')

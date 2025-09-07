@@ -12,7 +12,6 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.soloader.SoLoader
 import com.rlsideswipe.access.bridge.NativeControlPackage
 import com.zoontek.rnpermissions.RNPermissionsPackage
-import com.oblador.vectoricons.VectorIconsPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -25,7 +24,6 @@ class MainApplication : Application(), ReactApplication {
                 // Add our manual packages
                 packages.add(NativeControlPackage())
                 packages.add(RNPermissionsPackage())
-                packages.add(VectorIconsPackage())
                 
                 return packages
             }

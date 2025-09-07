@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -32,7 +32,7 @@ const StartScreen: React.FC = () => {
 
   useEffect(() => {
     checkServiceStatus();
-    
+
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active') {
         checkServiceStatus();
@@ -52,7 +52,7 @@ const StartScreen: React.FC = () => {
       }
       subscription?.remove();
     };
-  }, []);
+  }, [checkServiceStatus]);
 
   // Update detection statistics when service is active
   useEffect(() => {
@@ -90,13 +90,13 @@ const StartScreen: React.FC = () => {
     };
   }, [isActive, serviceEnabled]);
 
-  const checkServiceStatus = async () => {
+  const checkServiceStatus = useCallback(async () => {
     try {
       const enabled = await NativeControl.isServiceEnabled();
       const actuallyRunning = await NativeControl.isAccessibilityServiceActuallyRunning();
       const permissions = await NativeControl.checkPermissions();
       const batteryIgnored = await NativeControl.checkBatteryOptimization();
-      
+
       // Get detailed permission status for better debugging
       try {
         const detailedStatus = await NativeControl.getDetailedPermissionStatus();
@@ -104,10 +104,10 @@ const StartScreen: React.FC = () => {
       } catch (e) {
         console.warn('Could not get detailed permission status:', e);
       }
-      
+
       setServiceEnabled(enabled);
       setPermissionsGranted(permissions);
-      
+
       if (!enabled) {
         setStatusText('Needs Accessibility Service');
         setIsActive(false);
@@ -129,26 +129,26 @@ const StartScreen: React.FC = () => {
       console.error('Failed to check service status:', error);
       setStatusText('Service inactive');
     }
-  };
+  }, [isActive]);
 
   const [isBusy, setIsBusy] = useState(false);
   const handleStartStop = async () => {
-    if (isBusy) return;
+    if (isBusy) {return;}
     setIsBusy(true);
     console.log('handleStartStop called, isActive:', isActive);
     console.log('serviceEnabled:', serviceEnabled, 'permissionsGranted:', permissionsGranted);
-    
+
     if (!isActive) {
       // Before starting, do a comprehensive permission check
       try {
         console.log('Checking all required permissions...');
         const permissionCheck = await NativeControl.checkAllRequiredPermissions();
         console.log('Permission check results:', permissionCheck);
-        
+
         if (!permissionCheck.allPermissionsReady) {
           console.log('Not all permissions are ready, showing overlay');
           let missingItems = [];
-          
+
           if (!permissionCheck.accessibilityService) {
             missingItems.push('Accessibility Service');
           }
@@ -161,13 +161,13 @@ const StartScreen: React.FC = () => {
           if (!permissionCheck.batteryOptimizationIgnored) {
             missingItems.push('Battery Optimization');
           }
-          
+
           Alert.alert(
             'Setup Required',
             `Please complete the following setup steps:\n\n• ${missingItems.join('\n• ')}\n\nTap "Setup" to configure these permissions.`,
             [
               { text: 'Cancel', style: 'cancel' },
-              { text: 'Setup', onPress: () => setShowPermissionOverlay(true) }
+              { text: 'Setup', onPress: () => setShowPermissionOverlay(true) },
             ]
           );
           setIsBusy(false);
@@ -189,13 +189,13 @@ const StartScreen: React.FC = () => {
       if (isActive) {
         console.log('Stopping service...');
         setStatusText('Stopping...');
-        
+
         // Clear any pending timeouts
         if (startCheckTimeoutRef.current) {
           clearTimeout(startCheckTimeoutRef.current);
           startCheckTimeoutRef.current = null;
         }
-        
+
         await NativeControl.stop();
         setIsActive(false);
         setStatusText('Ready to start');
@@ -203,17 +203,17 @@ const StartScreen: React.FC = () => {
       } else {
         console.log('Starting service...');
         setStatusText('Requesting screen capture...');
-        
+
         console.log('Calling NativeControl.start()...');
         await NativeControl.start();
         console.log('NativeControl.start() completed successfully');
-        
+
         setIsActive(true);
         setStatusText('Capturing... (Service is running in background)');
-        
+
         // Show success message
         Alert.alert(
-          'Service Started!', 
+          'Service Started!',
           'The screen capture service is now running in the background.\n\n' +
           '✅ You can now minimize this app\n' +
           '✅ Open Rocket League Sideswipe\n' +
@@ -222,7 +222,7 @@ const StartScreen: React.FC = () => {
           'Ball detection is not yet implemented but the service is capturing frames.',
           [{ text: 'OK' }]
         );
-        
+
         // Check if service actually started after a short delay
         const attemptId = ++startAttemptRef.current;
         startCheckTimeoutRef.current = setTimeout(async () => {
@@ -232,7 +232,7 @@ const StartScreen: React.FC = () => {
               setIsActive(false);
               setStatusText('Service failed to start');
               Alert.alert(
-                'Service Failed', 
+                'Service Failed',
                 'The accessibility service failed to start properly. Please check:\n\n' +
                 '• Accessibility service is enabled\n' +
                 '• Battery optimization is disabled\n' +
@@ -248,19 +248,19 @@ const StartScreen: React.FC = () => {
     } catch (error: any) {
       console.error('Failed to start/stop service:', error);
       console.error('Error details:', JSON.stringify(error, null, 2));
-      
+
       // Clear any pending timeouts on error
       if (startCheckTimeoutRef.current) {
         clearTimeout(startCheckTimeoutRef.current);
         startCheckTimeoutRef.current = null;
       }
-      
+
       setIsActive(false);
       setStatusText('Error occurred');
-      
+
       let errorMessage = 'Failed to start/stop service. ';
       let errorTitle = 'Error';
-      
+
       if (error?.message?.includes('Screen capture permission denied')) {
         errorTitle = 'Permission Denied';
         errorMessage = 'Screen capture permission was denied. To use this app, you need to:\n\n' +
@@ -288,7 +288,7 @@ const StartScreen: React.FC = () => {
       } else {
         errorMessage += `Please check all permissions and try again.\n\nTechnical details: ${error?.message || 'Unknown error'}`;
       }
-      
+
       Alert.alert(errorTitle, errorMessage);
     } finally {
       setIsBusy(false);
@@ -336,7 +336,7 @@ const StartScreen: React.FC = () => {
         '📸 Template Captured',
         'Ball template captured at screen center. This will help improve ball detection accuracy.'
       );
-      
+
       // Update template count
       const stats = await NativeControl.getDetectionStatistics();
       setDetectionStats(stats);
@@ -347,12 +347,12 @@ const StartScreen: React.FC = () => {
   };
 
   const formatLastDetection = (timestamp: number) => {
-    if (timestamp === 0) return 'Never';
+    if (timestamp === 0) {return 'Never';}
     const now = Date.now();
     const diff = now - timestamp;
-    if (diff < 1000) return 'Just now';
-    if (diff < 60000) return `${Math.floor(diff / 1000)}s ago`;
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 1000) {return 'Just now';}
+    if (diff < 60000) {return `${Math.floor(diff / 1000)}s ago`;}
+    if (diff < 3600000) {return `${Math.floor(diff / 60000)}m ago`;}
     return `${Math.floor(diff / 3600000)}h ago`;
   };
 
@@ -360,7 +360,7 @@ const StartScreen: React.FC = () => {
     <View style={styles.container}>
       <View style={styles.content}>
         <Text style={styles.title}>RL Sideswipe Access</Text>
-        
+
         <TouchableOpacity
           style={[
             styles.startButton,
@@ -382,7 +382,7 @@ const StartScreen: React.FC = () => {
         {isActive && serviceEnabled && (
           <View style={styles.statsContainer}>
             <Text style={styles.statsTitle}>🎯 Detection Statistics</Text>
-            
+
             <View style={styles.statsGrid}>
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>Status</Text>
@@ -390,35 +390,35 @@ const StartScreen: React.FC = () => {
                   {detectionStats.isDetecting ? '🟢 Active' : '🟡 Standby'}
                 </Text>
               </View>
-              
+
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>Templates</Text>
                 <Text style={styles.statValue}>{detectionStats.templatesLoaded}</Text>
               </View>
-              
+
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>Frames</Text>
                 <Text style={styles.statValue}>{detectionStats.framesProcessed.toLocaleString()}</Text>
               </View>
-              
+
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>Balls Found</Text>
                 <Text style={[styles.statValue, { color: detectionStats.ballsDetected > 0 ? '#4CAF50' : '#666' }]}>
                   {detectionStats.ballsDetected}
                 </Text>
               </View>
-              
+
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>FPS</Text>
                 <Text style={styles.statValue}>{detectionStats.averageFPS.toFixed(1)}</Text>
               </View>
-              
+
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>Last Detection</Text>
                 <Text style={styles.statValue}>{formatLastDetection(detectionStats.lastDetectionTime)}</Text>
               </View>
             </View>
-            
+
             <TouchableOpacity style={styles.resetButton} onPress={resetStatistics}>
               <Text style={styles.resetButtonText}>🔄 Reset Stats</Text>
             </TouchableOpacity>
