@@ -379,8 +379,14 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
                 paint.style = Paint.Style.FILL
                 paint.strokeWidth = 0f
                 
-                // Draw large filled square (easier to see than circle)
-                val squareSize = 40f
+                // Draw large filled circle (more ball-like) with square fallback
+                val ballSize = 20f
+                canvas.drawCircle(ballX, ballY, ballSize, paint)
+                
+                // Also draw a small square for high visibility
+                val squareSize = 30f
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = 3f
                 canvas.drawRect(
                     ballX - squareSize/2, 
                     ballY - squareSize/2,
@@ -389,17 +395,11 @@ class PredictionOverlayView(private val service: PredictionOverlayService) : Vie
                     paint
                 )
                 
-                // Draw border around square
+                // Draw white border around circle
                 paint.style = Paint.Style.STROKE
                 paint.strokeWidth = 4f
                 paint.color = Color.WHITE
-                canvas.drawRect(
-                    ballX - squareSize/2, 
-                    ballY - squareSize/2,
-                    ballX + squareSize/2, 
-                    ballY + squareSize/2, 
-                    paint
-                )
+                canvas.drawCircle(ballX, ballY, ballSize, paint)
                 
                 // Draw crosshair at center
                 paint.strokeWidth = 3f

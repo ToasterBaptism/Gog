@@ -1,4 +1,9 @@
 module.exports = {
+  project: {
+    android: {
+      packageName: 'com.rlsideswipe.access',
+    },
+  },
   dependencies: {
     'react-native-permissions': {
       platforms: {

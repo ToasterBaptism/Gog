@@ -383,7 +383,7 @@ class ScreenCaptureService : Service() {
             if (bitmap != null) {
                 // Store latest bitmap for template learning (create a copy to avoid recycling issues)
                 latestScreenBitmap?.recycle() // Clean up previous bitmap
-                latestScreenBitmap = bitmap.copy(bitmap.config, false)
+                latestScreenBitmap = bitmap.copy(bitmap.config ?: Bitmap.Config.ARGB_8888, false)
                 
                 // Use inference engine for ball detection, fallback to template matching if needed
                 Log.d(TAG, "🤖 Using inference engine: ${inferenceEngine?.javaClass?.simpleName}")
@@ -433,6 +433,15 @@ class ScreenCaptureService : Service() {
                         val trajectory = trajectoryPredictor?.update(ballDetection.ball, System.currentTimeMillis())
                         if (trajectory != null) {
                             trajectoryPoints.value = trajectory
+                            
+                            // 🔧 FIX: Convert trajectory points to PredictionPoints and send to overlay
+                            val predictionPoints = trajectory.map { point ->
+                                PredictionOverlayService.PredictionPoint(point.x, point.y, point.tMs.toFloat())
+                            }
+                            if (predictionPoints.isNotEmpty()) {
+                                Log.d(TAG, "🎯 Sending ${predictionPoints.size} trajectory points to PredictionOverlayService")
+                                PredictionOverlayService.updatePredictions(predictionPoints)
+                            }
                         }
                         
                         // Update notification to show ball detection is working
@@ -568,6 +577,12 @@ class ScreenCaptureService : Service() {
                     }
                 }
                 
+                // 🔧 FIX: Send overlay points to PredictionOverlayService
+                if (overlayPoints.isNotEmpty()) {
+                    Log.d(TAG, "🎯 Sending ${overlayPoints.size} overlay points to PredictionOverlayService")
+                    PredictionOverlayService.updatePredictions(overlayPoints)
+                }
+                
                 // Overlay updates flow via frameResults/trajectoryPoints observers
             } else {
                 // No template matches found - show debug overlay for TensorFlow Lite build
@@ -583,6 +598,11 @@ class ScreenCaptureService : Service() {
                     testPoints.forEach { point ->
                         Log.d(TAG, "🧪 Test point: (${point.x}, ${point.y}) time=${point.time}")
                     }
+                    
+                    // 🔧 FIX: Send test points to PredictionOverlayService
+                    Log.d(TAG, "🎯 Sending ${testPoints.size} test points to PredictionOverlayService")
+                    PredictionOverlayService.updatePredictions(testPoints)
+                    
                     // Overlay updates flow via LiveData observers
                 }
             }
